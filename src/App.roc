@@ -9,16 +9,19 @@ interface App
         S2022.D02,
         S2022.D03,
         S2023.D01,
+        S2023.D02,
     ]
 
 ## Export a list of the solutions included in this app
 solutions : List AoC.Solution
 solutions = 
     [
+        # 2022
         S2022.D01.solution,
+
+        # 2023
         S2023.D01.solution,
-        S2022.D03.solution,
-        S2022.D02.solution,
+        S2023.D02.solution,
     ]
     |> List.sortWith sortByYearAndDay
 
