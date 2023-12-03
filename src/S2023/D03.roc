@@ -154,11 +154,6 @@ getNumberAtLocation = \schematic, loc, state ->
             Ok (Digit u8) -> Ok (loc, u8)
             _ -> Err Invalid
 
-    # dbg loc
-    # dbg T "LEFT" maybeLeft
-    # dbg T "RIGHT" maybeRight
-    # dbg T "CURRENT" maybeCurrent
-
     when (state,             maybeLeft,    maybeRight,     maybeCurrent ) is 
         (WalkingLeft,        Ok (left, _), _,              Ok _         ) -> getNumberAtLocation schematic left WalkingLeft
         (WalkingLeft,        _,            _,              Err _        ) -> crash "starting location isn't a digit or isn't in schematic"
@@ -237,6 +232,60 @@ part1 = \_ ->
     
     Ok "The sum of all of the part numbers in the engine schematic is \(Num.toStr sum)"
 
+gearLocations : Schematic -> List Location
+gearLocations = \schematic ->
+    acc, loc, token <- Dict.walk schematic [] 
+
+    when token is 
+        Symbol Asterisk -> List.append acc loc
+        _ -> acc
+
+hasExactlyTwoParts : List LocationToken, List U64 -> Bool
+hasExactlyTwoParts = \lts, seen ->
+    next = List.dropFirst lts 1
+    when lts is 
+        [] -> List.len seen == 2
+        [first, .. as rest] ->
+            when first.token is 
+                Number u64 -> hasExactlyTwoParts next (List.append seen u64) 
+                _ -> crash "expect only numbers"
+
+calculateGearRatio : List LocationToken -> U64
+calculateGearRatio = \lts ->
+    
+    expect List.len lts <= 2
+
+    next = List.dropFirst lts 1
+    when lts is 
+        [] -> 1 # base case
+        [first, ..] -> 
+            when first.token is 
+                Number u64 -> u64 * (calculateGearRatio next) # next
+                _ -> crash "expected only numbers"
+
+part2Example : U64
+part2Example = 
+    exampleSchematic
+    |> gearLocations 
+    |> List.map (adjacentLocations exampleSchematic)
+    |> List.map filterUniqueNumbers
+    |> List.keepIf \lts -> hasExactlyTwoParts lts []
+    |> List.map calculateGearRatio
+    |> List.sum
+
+expect part2Example == 467835
+        
 part2 : {} -> Result Str [NotImplemented, Error Str]
-part2 = \_ -> Err NotImplemented 
+part2 = \_ -> 
+    sum = 
+        inputSchematic
+        |> gearLocations 
+        |> List.map (adjacentLocations inputSchematic)
+        |> List.map filterUniqueNumbers
+        |> List.keepIf \lts -> hasExactlyTwoParts lts []
+        |> List.map calculateGearRatio
+        |> List.sum
+
+    Ok "The the sum of all of the gear ratios in the engine schematic is \(Num.toStr sum)"
+
     
