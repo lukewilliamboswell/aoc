@@ -238,8 +238,6 @@ runSolution = \solution ->
     {} <- Stdout.write (ANSI.withFg "done\n" Gray) |> Task.await
 
     header = ANSI.withFg "Solution for \(AoC.display solution)" Blue
-    year = ANSI.withFg "\(Num.toStr solution.year)" Blue
-    day = ANSI.withFg "\(Num.toStr solution.day)" Blue
     part1 = solutionResultToStr partOneResult
     part2 = solutionResultToStr partTwoResult
     part1Time = ANSI.withFg (deltaToStr start mid) Blue
@@ -247,21 +245,14 @@ runSolution = \solution ->
     totalTime = ANSI.withFg (deltaToStr start end) Blue
     
     """
-    ---------------------------------
-    \(header)
-    ---------------------------------
-    year: \(year)
-    day: \(day)
-    total time: \(totalTime)
-
-    Part 1 calculated in \(part1Time)
-    ---------------------------------
+    \(header) completed in \(totalTime) ms
+    --------------------------------------
+    Part 1 took \(part1Time) ms
     \(part1)
-
-    Part 2 calculated in \(part2Time)
-    ---------------------------------
+    --------------------------------------
+    Part 2 took \(part2Time) ms
     \(part2)
-
+    --------------------------------------
     """
     |> Stdout.line
 

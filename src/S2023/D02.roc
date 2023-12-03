@@ -4,7 +4,7 @@ interface S2023.D02
         AoC,
         Parser.Core.{ Parser, const, map, keep, skip, oneOf, sepBy },
         Parser.String.{ parseStr, string, digits, codeunit },
-        "2023-02.txt" as input : Str,
+        "2023-02.txt" as puzzleInput : Str,
     ]
 
 solution : AoC.Solution
@@ -86,7 +86,7 @@ part1 : {} -> Result Str [NotImplemented, Error Str]
 part1 = \_ -> 
 
     games <- 
-        parseStr (sepBy parseGame (codeunit '\n')) input
+        parseStr (sepBy parseGame (codeunit '\n')) puzzleInput
         |> Result.mapErr \_ -> Error "unable to parse input"
         |> Result.try 
 
@@ -97,7 +97,7 @@ part1 = \_ ->
             else
                 validGames
     
-    Ok "sum of the IDs is \(ids |> List.sum |> Num.toStr)"
+    Ok "The sum of the IDs is \(ids |> List.sum |> Num.toStr)"
 
 calcGameMinCubeSet : List (List [Red U32, Green U32, Blue U32]) -> { red : U32, green : U32, blue : U32 }
 calcGameMinCubeSet = \subsets ->
@@ -121,7 +121,7 @@ expect
 part2 : {} -> Result Str [NotImplemented, Error Str]
 part2 = \_ -> 
     games <- 
-        parseStr (sepBy parseGame (codeunit '\n')) input
+        parseStr (sepBy parseGame (codeunit '\n')) puzzleInput
         |> Result.mapErr \_ -> Error "unable to parse input"
         |> Result.try 
 

@@ -6,10 +6,11 @@ interface App
     imports [
         AoC,
         S2022.D01,
-        S2022.D02,
-        S2022.D03,
+        # S2022.D02,
+        # S2022.D03,
         S2023.D01,
         S2023.D02,
+        S2023.D03,
     ]
 
 ## Export a list of the solutions included in this app
@@ -22,6 +23,7 @@ solutions =
         # 2023
         S2023.D01.solution,
         S2023.D02.solution,
+        S2023.D03.solution,
     ]
     |> List.sortWith sortByYearAndDay
 
