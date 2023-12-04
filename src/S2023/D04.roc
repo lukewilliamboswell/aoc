@@ -25,24 +25,39 @@ part1 = \input ->
 
     cards <-
         parseStr (sepBy cardParser (codeunit '\n')) input
-        |> Result.mapErr \err -> 
-            dbg err
-            Error "unable to parse input"
+        |> Result.mapErr \_ -> Error "unable to parse input"
         |> Result.try
 
-    sum = 
-        cards
-        |> List.map scoreCard
-        |> List.sum 
+    sum = cards |> List.map scoreCard |> List.sum
 
     Ok "The scratch cards are worth a total of \(Num.toStr sum) points."
 
 expect part1 exampleInput == Ok "The scratch cards are worth a total of 13 points."
 
 part2 : Str -> Result Str [NotImplemented, Error Str]
-part2 = \_input -> Err NotImplemented
+part2 = \input ->
+
+    cards <-
+        parseStr (sepBy cardParser (codeunit '\n')) input
+        |> Result.mapErr \_ -> Error "unable to parse input"
+        |> Result.try
+
+    cardsWithWins = cards |> List.map \card -> (card, countWins card)
+
+    initCounts = 
+        List.range { start: At 0, end: Before (List.len cards) } 
+        |> List.map \_ -> 1 # initiliase to one to include starting scratchy
+
+    counts = List.walk cardsWithWins initCounts countCards 
+
+    sum = counts |> List.sum
+
+    Ok "The total number is \(Num.toStr sum) scratchcards."
+
+expect part2 exampleInput == Ok "The total number is 30 scratchcards."
 
 Card : { id : Nat, winning : List Nat, picks : List Nat }
+CardCounts : List Nat # note card count index == (card.id - 1) 
 
 cardParser : Parser (List U8) Card
 cardParser =
@@ -76,25 +91,59 @@ exampleCard2 = {
 expect parseStr cardParser "Card 1: 41 48 83 86 17 | 83 86  6 31 17  9 48 53" == Ok exampleCard1
 expect parseStr cardParser "Card 2: 13 32 20 16 61 | 61 30 68 82 17 32 24 19" == Ok exampleCard2
 
-scoreCard : Card -> Nat
-scoreCard = \{winning, picks} -> scoreCardHelp picks winning 1 0
+scoreCard : Card -> Nat 
+scoreCard = \card -> card |> countWins |> calcScore 0
 
-scoreCardHelp : List Nat, List Nat, Nat, Nat -> Nat
-scoreCardHelp = \picks, winning, multiplier, score ->
+countWins : Card -> Nat
+countWins = \{winning, picks} -> 
+    countWinsHelp picks winning 0 
+
+countWinsHelp : List Nat, List Nat, Nat -> Nat
+countWinsHelp = \picks, winning, wins ->
     next = List.dropFirst picks 1
-    nextMultiplier = multiplier + 1
 
     when picks is
-        [] -> 
-            score
-        [first, .. as rest] -> 
-            if List.contains winning first then
-                if score == 0 then
-                    scoreCardHelp next winning nextMultiplier 1
-                else 
-                    scoreCardHelp next winning nextMultiplier (2 * score)
+        [] -> wins # base case
+        [p, .. as rest] -> 
+            if List.contains winning p then
+                countWinsHelp next winning (wins + 1)
             else 
-                scoreCardHelp next winning multiplier score
+                countWinsHelp next winning wins
+
+calcScore : Nat, Nat -> Nat
+calcScore = \wins, score -> 
+    if wins == 0 then 
+        score # base case
+    else if score == 0 then 
+        calcScore (wins - 1) 1
+    else
+        calcScore (wins - 1) (score * 2) 
 
 expect scoreCard exampleCard1 == 8
 expect scoreCard exampleCard2 == 2
+
+countCards : CardCounts, (Card, Nat) -> CardCounts
+countCards = \counts, (card, wins) -> 
+    
+    idx = card.id - 1
+    
+    currentCount = 
+        when List.get counts idx is 
+            Ok c -> c
+            Err OutOfBounds -> crash "got invalid index for card counts"  
+    
+    countCardsHelp counts wins currentCount card.id
+
+countCardsHelp : CardCounts, Nat, Nat, Nat -> CardCounts
+countCardsHelp = \counts, winsRemaining, currentCount, currentId ->
+    nextId = currentId + 1
+
+    if winsRemaining == 0 then 
+        counts 
+    else
+
+        inc = \c -> c + currentCount
+        idx = nextId - 1
+        updatedCounts = List.update counts idx inc
+
+        countCardsHelp updatedCounts (winsRemaining - 1) currentCount nextId
