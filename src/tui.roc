@@ -225,13 +225,13 @@ runSolution = \solution ->
 
     {} <- Stdout.write (ANSI.withFg "Running Part 1..." Gray) |> Task.await
 
-    partOneResult = solution.part1 {}
+    partOneResult = solution.part1 solution.puzzleInput
 
     mid <- Utc.now |> Task.await
 
     {} <- Stdout.write (ANSI.withFg "done\nRunning Part 2..." Gray) |> Task.await
 
-    partTwoResult = solution.part2 {}
+    partTwoResult = solution.part2 solution.puzzleInput
 
     end <- Utc.now |> Task.await
 
