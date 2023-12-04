@@ -8,7 +8,7 @@ interface S2023.D04
     ]
 
 solution : AoC.Solution
-solution = { year: 2023, day: 4, title: "src/S2023/D03.roc", part1, part2, puzzleInput }
+solution = { year: 2023, day: 4, title: "Scratchcards", part1, part2, puzzleInput }
 
 exampleInput =
     """
@@ -95,8 +95,7 @@ scoreCard : Card -> Nat
 scoreCard = \card -> card |> countWins |> calcScore 0
 
 countWins : Card -> Nat
-countWins = \{winning, picks} -> 
-    countWinsHelp picks winning 0 
+countWins = \card -> countWinsHelp card.picks card.winning 0 
 
 countWinsHelp : List Nat, List Nat, Nat -> Nat
 countWinsHelp = \picks, winning, wins ->
