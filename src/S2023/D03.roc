@@ -3,7 +3,7 @@ interface S2023.D03
     imports [AoC,"2023-03.txt" as puzzleInput : Str]
 
 solution : AoC.Solution
-solution = { year: 2023, day: 3, title: "Gear Ratios", part1, part2 }
+solution = { year: 2023, day: 3, title: "Gear Ratios", part1, part2, puzzleInput }
 
 exampleInput = 
     """
@@ -24,6 +24,53 @@ Token : [Digit U8, Dot,  Symbol [Asterisk, Slash, Equal, Ampersand, At, Plus, Ha
 LocationToken : { loc : Location, token : Token}
 Schematic : Dict Location Token
 
+part1 : Str -> Result Str [NotImplemented, Error Str]
+part1 = \input -> 
+
+    inputSchematic : Schematic
+    inputSchematic = 
+        input
+        |> parseLocationTokens
+        |> filterDots
+        |> toSchematic
+        |> replaceDigitsWithNumbers
+        
+    sum = 
+        inputSchematic
+        |> symbolLocations 
+        |> List.map (adjacentLocations inputSchematic)
+        |> List.map filterUniqueNumbers
+        |> List.map sumPartNumbers # assume each number can only see 1 symbol, otherwise we will double count
+        |> List.sum
+    
+    Ok "The sum of all of the part numbers in the engine schematic is \(Num.toStr sum)"
+
+expect part1 exampleInput == Ok "The sum of all of the part numbers in the engine schematic is 4361"
+
+part2 : Str -> Result Str [NotImplemented, Error Str]
+part2 = \input -> 
+
+    inputSchematic : Schematic
+    inputSchematic = 
+        input
+        |> parseLocationTokens
+        |> filterDots
+        |> toSchematic
+        |> replaceDigitsWithNumbers
+        
+    sum = 
+        inputSchematic
+        |> gearLocations 
+        |> List.map (adjacentLocations inputSchematic)
+        |> List.map filterUniqueNumbers
+        |> List.keepIf \lts -> hasExactlyTwoParts lts []
+        |> List.map calculateGearRatio
+        |> List.sum
+
+    Ok "The the sum of all of the gear ratios in the engine schematic is \(Num.toStr sum)"
+
+expect part2 exampleInput == Ok "The the sum of all of the gear ratios in the engine schematic is 467835"
+            
 parseLocationTokens : Str -> List (List LocationToken)
 parseLocationTokens = \input ->
     rowStr, row <- input |> Str.split "\n" |> List.mapWithIndex
@@ -193,45 +240,6 @@ sumPartNumbers = \lts ->
                 Number u64 -> u64 + (sumPartNumbers next) # next
                 _ -> crash "expected only numbers"
 
-exampleSchematic : Schematic
-exampleSchematic = 
-    exampleInput
-    |> parseLocationTokens
-    |> filterDots
-    |> toSchematic
-    |> replaceDigitsWithNumbers
-
-part1Example : U64
-part1Example = 
-    exampleSchematic
-    |> symbolLocations 
-    |> List.map (adjacentLocations exampleSchematic)
-    |> List.map filterUniqueNumbers
-    |> List.map sumPartNumbers # assume each number can only see 1 symbol, otherwise we will double count
-    |> List.sum
-
-expect part1Example == 4361
-
-inputSchematic : Schematic
-inputSchematic = 
-    puzzleInput
-    |> parseLocationTokens
-    |> filterDots
-    |> toSchematic
-    |> replaceDigitsWithNumbers
-
-part1 : {} -> Result Str [NotImplemented, Error Str]
-part1 = \_ -> 
-    sum = 
-        inputSchematic
-        |> symbolLocations 
-        |> List.map (adjacentLocations inputSchematic)
-        |> List.map filterUniqueNumbers
-        |> List.map sumPartNumbers # assume each number can only see 1 symbol, otherwise we will double count
-        |> List.sum
-    
-    Ok "The sum of all of the part numbers in the engine schematic is \(Num.toStr sum)"
-
 gearLocations : Schematic -> List Location
 gearLocations = \schematic ->
     acc, loc, token <- Dict.walk schematic [] 
@@ -262,30 +270,5 @@ calculateGearRatio = \lts ->
             when first.token is 
                 Number u64 -> u64 * (calculateGearRatio next) # next
                 _ -> crash "expected only numbers"
-
-part2Example : U64
-part2Example = 
-    exampleSchematic
-    |> gearLocations 
-    |> List.map (adjacentLocations exampleSchematic)
-    |> List.map filterUniqueNumbers
-    |> List.keepIf \lts -> hasExactlyTwoParts lts []
-    |> List.map calculateGearRatio
-    |> List.sum
-
-expect part2Example == 467835
-        
-part2 : {} -> Result Str [NotImplemented, Error Str]
-part2 = \_ -> 
-    sum = 
-        inputSchematic
-        |> gearLocations 
-        |> List.map (adjacentLocations inputSchematic)
-        |> List.map filterUniqueNumbers
-        |> List.keepIf \lts -> hasExactlyTwoParts lts []
-        |> List.map calculateGearRatio
-        |> List.sum
-
-    Ok "The the sum of all of the gear ratios in the engine schematic is \(Num.toStr sum)"
 
     

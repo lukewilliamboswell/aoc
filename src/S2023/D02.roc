@@ -8,7 +8,42 @@ interface S2023.D02
     ]
 
 solution : AoC.Solution
-solution = { year: 2023, day: 2, title: "Cube Conundrum", part1, part2 }
+solution = { year: 2023, day: 2, title: "Cube Conundrum", part1, part2, puzzleInput }
+
+part1 : Str -> Result Str [NotImplemented, Error Str]
+part1 = \input ->
+
+    games <-
+        parseStr (sepBy parseGame (codeunit '\n')) input
+        |> Result.mapErr \_ -> Error "unable to parse input"
+        |> Result.try
+
+    ids =
+        List.walkWithIndex games [] \validGames, game, idx ->
+            if isValidGame game then
+                List.append validGames (Num.toU32 idx + 1)
+            else
+                validGames
+
+    Ok "The sum of the IDs is \(ids |> List.sum |> Num.toStr)"
+
+part2 : Str -> Result Str [NotImplemented, Error Str]
+part2 = \input ->
+    games <-
+        parseStr (sepBy parseGame (codeunit '\n')) input
+        |> Result.mapErr \_ -> Error "unable to parse input"
+        |> Result.try
+
+    totalPower =
+        sum, game, _ <- games |> List.walkWithIndex 0
+
+        { red, green, blue } = calcGameMinCubeSet game
+
+        power = red * green * blue
+
+        sum + power
+
+    Ok "The sum of the power is \(Num.toStr totalPower)"
 
 parseNumberColor : Parser (List U8) [Red U32, Green U32, Blue U32]
 parseNumberColor =
@@ -82,23 +117,6 @@ isValidSubset = \subsubset ->
 expect isValidSubset [Red 1u32, Green 2u32, Blue 6u32]
 expect !(isValidSubset [Red 100u32, Green 2u32, Blue 6u32])
 
-part1 : {} -> Result Str [NotImplemented, Error Str]
-part1 = \_ -> 
-
-    games <- 
-        parseStr (sepBy parseGame (codeunit '\n')) puzzleInput
-        |> Result.mapErr \_ -> Error "unable to parse input"
-        |> Result.try 
-
-    ids = 
-        List.walkWithIndex games [] \validGames, game, idx ->
-            if isValidGame game then
-                List.append validGames (Num.toU32 idx + 1)
-            else
-                validGames
-    
-    Ok "The sum of the IDs is \(ids |> List.sum |> Num.toStr)"
-
 calcGameMinCubeSet : List (List [Red U32, Green U32, Blue U32]) -> { red : U32, green : U32, blue : U32 }
 calcGameMinCubeSet = \subsets ->
     List.walk subsets { red: 0, green: 0, blue: 0 } calcMinCubeSetHelp
@@ -117,22 +135,3 @@ expect
     game = parseStr parseGame "Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green" |> Result.withDefault []
     minCubes = calcGameMinCubeSet game
     minCubes == { red: 4, green: 2, blue: 6 }
-
-part2 : {} -> Result Str [NotImplemented, Error Str]
-part2 = \_ -> 
-    games <- 
-        parseStr (sepBy parseGame (codeunit '\n')) puzzleInput
-        |> Result.mapErr \_ -> Error "unable to parse input"
-        |> Result.try 
-
-    totalPower = 
-        sum, game, _ <- games |> List.walkWithIndex 0
-
-        { red, green, blue } = calcGameMinCubeSet game
-
-        power = red * green * blue
-
-        sum + power
-
-    Ok "The sum of the power is \(Num.toStr totalPower)"
-    
