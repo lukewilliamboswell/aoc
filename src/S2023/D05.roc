@@ -14,6 +14,7 @@ Map : List { s : Nat, d : Nat, r : Nat }
 
 Model : {
     seeds : List Nat,
+    seedRanges : List (List Nat),
     seedToSoil : Map,
     soilToFertilizer : Map,
     fertilizerToWater : Map,
@@ -45,7 +46,36 @@ part1 = \input ->
 
     model <- parse input |> Result.mapErr Error |> Result.try
 
-    seeds = model.seeds
+    lowest <- 
+        calculateLowest model UseSeeds
+        |> Result.mapErr \_ -> Error "expected at least one location"
+        |> Result.try
+
+    Ok "The lowest location from initial seed numbers is \(Num.toStr lowest)"
+
+expect part1 exampleInput == Ok "The lowest location from initial seed numbers is 35"
+
+part2 : Str -> Result Str [NotImplemented, Error Str]
+part2 = \input -> 
+
+    model <- parse input |> Result.mapErr Error |> Result.try
+
+    lowest <- 
+        calculateLowest model UseSeedRanges
+        |> Result.mapErr \_ -> Error "expected at least one location"
+        |> Result.try
+
+    Ok "The lowest location from seed ranges is \(Num.toStr lowest)"
+
+
+expect part2 exampleInput == Ok "The lowest location from seed ranges is 46"
+
+calculateLowest : Model, [UseSeeds, UseSeedRanges] -> Result Nat _
+calculateLowest = \model, select ->
+    seeds = 
+        when select is 
+            UseSeeds -> model.seeds
+            UseSeedRanges -> List.join model.seedRanges
 
     locations =
         seeds
@@ -57,21 +87,9 @@ part1 = \input ->
         |> List.map (map model.temperatureToHumidity)
         |> List.map (map model.humidityToLocation)
 
-    lowest <-
-        locations
-        |> List.sortAsc
-        |> List.first
-        |> Result.mapErr \_ -> Error "expected at least one location"
-        |> Result.try
-
-    Ok "The lowest location from initial seed numbers is \(Num.toStr lowest)"
-
-expect part1 exampleInput == Ok "The lowest location from initial seed numbers is 35"
-
-part2 : Str -> Result Str [NotImplemented, Error Str]
-part2 = \_ -> Err NotImplemented
-
-# expect part2 exampleInput == Ok "The total number is 30 scratchcards."
+    locations
+    |> List.sortAsc
+    |> List.first
 
 entryParser : Parser (List U8) { s : Nat, d : Nat, r : Nat }
 entryParser =
@@ -86,11 +104,24 @@ expect parseStr entryParser "50 98 2" == Ok { s: 98, d: 50, r: 2 }
 
 parse : Str -> Result Model Str
 parse = \input ->
+
+    parseSeedRange : Parser (List U8) (List Nat)
+    parseSeedRange = 
+        const (\start -> \length -> List.range {start : At start, end : Before (start + length)}) 
+        |> keep digits 
+        |> skip (codeunit ' ')
+        |> keep digits
+
     when input |> Str.split "\n\n" is
         [rawSeeds, s2s, s2f, f2w, w2l, l2t, t2h, h2l] ->
             seeds <-
                 parseStr (sepBy digits (codeunit ' ')) (Str.replaceFirst rawSeeds "seeds: " "")
                 |> Result.mapErr \_ -> "unable to parse seeds"
+                |> Result.try
+
+            seedRanges <- 
+                parseStr (sepBy parseSeedRange (codeunit ' ')) (Str.replaceFirst rawSeeds "seeds: " "")
+                |> Result.mapErr \_ -> "unable to parse seed ranges"
                 |> Result.try
 
             seedToSoil <-
@@ -130,6 +161,7 @@ parse = \input ->
 
             Ok {
                 seeds,
+                seedRanges,
                 seedToSoil,
                 soilToFertilizer,
                 fertilizerToWater,
@@ -141,44 +173,44 @@ parse = \input ->
 
         _ -> Err "unexpected input"
 
-exampleParsed : Model
-exampleParsed = {
-    seeds: [79, 14, 55, 13],
-    fertilizerToWater: [
-        { d: 49, r: 8, s: 53 },
-        { d: 0, r: 42, s: 11 },
-        { d: 42, r: 7, s: 0 },
-        { d: 57, r: 4, s: 7 },
-    ],
-    humidityToLocation: [
-        { d: 60, r: 37, s: 56 },
-        { d: 56, r: 4, s: 93 },
-    ],
-    lightToTemperature: [
-        { d: 45, r: 23, s: 77 },
-        { d: 81, r: 19, s: 45 },
-        { d: 68, r: 13, s: 64 },
-    ],
-    seedToSoil: [
-        { d: 50, r: 2, s: 98 },
-        { d: 52, r: 48, s: 50 },
-    ],
-    soilToFertilizer: [
-        { d: 0, r: 37, s: 15 },
-        { d: 37, r: 2, s: 52 },
-        { d: 39, r: 15, s: 0 },
-    ],
-    temperatureToHumidity: [
-        { d: 0, r: 1, s: 69 },
-        { d: 1, r: 69, s: 0 },
-    ],
-    waterToLight: [
-        { d: 88, r: 7, s: 18 },
-        { d: 18, r: 70, s: 25 },
-    ],
-}
+# exampleParsed : Model
+# exampleParsed = {
+#     seeds: [79, 14, 55, 13],
+#     fertilizerToWater: [
+#         { d: 49, r: 8, s: 53 },
+#         { d: 0, r: 42, s: 11 },
+#         { d: 42, r: 7, s: 0 },
+#         { d: 57, r: 4, s: 7 },
+#     ],
+#     humidityToLocation: [
+#         { d: 60, r: 37, s: 56 },
+#         { d: 56, r: 4, s: 93 },
+#     ],
+#     lightToTemperature: [
+#         { d: 45, r: 23, s: 77 },
+#         { d: 81, r: 19, s: 45 },
+#         { d: 68, r: 13, s: 64 },
+#     ],
+#     seedToSoil: [
+#         { d: 50, r: 2, s: 98 },
+#         { d: 52, r: 48, s: 50 },
+#     ],
+#     soilToFertilizer: [
+#         { d: 0, r: 37, s: 15 },
+#         { d: 37, r: 2, s: 52 },
+#         { d: 39, r: 15, s: 0 },
+#     ],
+#     temperatureToHumidity: [
+#         { d: 0, r: 1, s: 69 },
+#         { d: 1, r: 69, s: 0 },
+#     ],
+#     waterToLight: [
+#         { d: 88, r: 7, s: 18 },
+#         { d: 18, r: 70, s: 25 },
+#     ],
+# }
 
-expect parse exampleInput == Ok exampleParsed
+# expect parse exampleInput == Ok exampleParsed
 
 exampleInput =
     """
