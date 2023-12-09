@@ -38,9 +38,6 @@ part2 = \input ->
 
     nextValues = histories |> List.map (predict First)
 
-    dbg
-        nextValues
-
     sum = nextValues |> List.sum
 
     Ok "The the sum of the FIRST extrapolated values \(Num.toStr sum)"
