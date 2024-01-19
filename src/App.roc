@@ -14,6 +14,7 @@ interface App
         S2023.D04,
         S2023.D05,
         S2023.D09,
+        S2023.D10,
     ]
 
 ## Export a list of the solutions included in this app
@@ -31,6 +32,7 @@ solutions =
         S2023.D04.solution,
         S2023.D05.solution,
         S2023.D09.solution,
+        S2023.D10.solution,
     ]
     |> List.sortWith sortByYearAndDay
 

@@ -2,3 +2,12 @@ src/cli
 src/web
 src/tui
 day1
+
+aoc-2020/**/aoc
+aoc-2020/**/main
+aoc-2021/**/aoc
+aoc-2021/**/main
+aoc-2022/**/aoc
+aoc-2022/**/main
+aoc-2023/**/aoc
+aoc-2023/**/main
