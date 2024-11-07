@@ -1,13 +1,18 @@
-src/cli
-src/web
-src/tui
-day1
+# ignore all build files
+2020/*
+!2020/*.roc
 
-aoc-2020/**/aoc
-aoc-2020/**/main
-aoc-2021/**/aoc
-aoc-2021/**/main
-aoc-2022/**/aoc
-aoc-2022/**/main
-aoc-2023/**/aoc
-aoc-2023/**/main
+2021/*
+!2021/*.roc
+
+2022/*
+!2022/*.roc
+
+2023/*
+!2023/*.roc
+
+*.tar.br
+
+input/
+
+.DS_Store
