@@ -1,46 +1,54 @@
-interface S2023.D09
-    exposes [solution]
-    imports [
-        AoC,
-        Parser.Core.{ Parser, const, oneOf, keep, skip, sepBy },
-        Parser.String.{ parseStr, digits, codeunit },
-        "2023-09.txt" as puzzleInput : Str,
-    ]
+app [main] {
+    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.16.0/O00IPk-Krg_diNS2dVWlI0ZQP794Vctxzv0ha96mK0E.tar.br",
+    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.1.0/DcTQw_U67F22cX7pgx93AcHz_ShvHRaFIFjcijF3nz0.tar.br",
+    parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/0.8.0/PCkJq9IGyIpMfwuW-9hjfXd6x-bHb1_OZdacogpBcPM.tar.br",
+}
 
-solution : AoC.Solution
-solution = { year: 2023, day: 9, title: "Mirage Maintenance", part1, part2, puzzleInput }
+import pf.Stdin
+import pf.Stdout
+import pf.Utc
+import aoc.AoC {
+    stdin: Stdin.readToEnd,
+    stdout: Stdout.write,
+    time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
+}
+import parser.String exposing [digits, parseStr, codeunit]
+import parser.Parser exposing [Parser, oneOf, sepBy, const, keep, skip]
 
-part1 : Str -> Result Str [NotImplemented, Error Str]
+main =
+    AoC.solve {
+        year: 2023,
+        day: 9,
+        title: "Mirage Maintenance",
+        part1,
+        part2,
+    }
+
+part1 : Str -> Result Str _
 part1 = \input ->
 
-    histories <-
-        parseStr (sepBy historyParser (codeunit '\n')) input
-        |> Result.mapErr \_ -> Error "unable to parse input"
-        |> Result.try
+    histories = parseStr? (sepBy historyParser (codeunit '\n')) input
 
     nextValues = histories |> List.map (predict Last)
 
     sum = nextValues |> List.sum
 
-    Ok "The the sum of the LAST extrapolated values \(Num.toStr sum)"
+    Ok "The the sum of the LAST extrapolated values $(Num.toStr sum)"
 
 expect
     res = part1 exampleInput
     res == Ok "The the sum of the LAST extrapolated values 114"
 
-part2 : Str -> Result Str [NotImplemented, Error Str]
+part2 : Str -> Result Str _
 part2 = \input ->
 
-    histories <-
-        parseStr (sepBy historyParser (codeunit '\n')) input
-        |> Result.mapErr \_ -> Error "unable to parse input"
-        |> Result.try
+    histories = parseStr? (sepBy historyParser (codeunit '\n')) input
 
     nextValues = histories |> List.map (predict First)
 
     sum = nextValues |> List.sum
 
-    Ok "The the sum of the FIRST extrapolated values \(Num.toStr sum)"
+    Ok "The the sum of the FIRST extrapolated values $(Num.toStr sum)"
 
 expect part2 exampleInput == Ok "The the sum of the FIRST extrapolated values 2"
 

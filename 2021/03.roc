@@ -1,5 +1,5 @@
 app [main] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.15.0/SlwdbJ-3GR7uBWQo6zlmYWNYOxnvo8r6YABXD-45UOw.tar.br",
+    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.16.0/O00IPk-Krg_diNS2dVWlI0ZQP794Vctxzv0ha96mK0E.tar.br",
     aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.1.0/DcTQw_U67F22cX7pgx93AcHz_ShvHRaFIFjcijF3nz0.tar.br",
 }
 
@@ -7,7 +7,7 @@ import pf.Stdin
 import pf.Stdout
 import pf.Utc
 import aoc.AoC {
-    stdin: Stdin.bytes,
+    stdin: Stdin.readToEnd,
     stdout: Stdout.write,
     time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
 }

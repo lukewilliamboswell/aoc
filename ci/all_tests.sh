@@ -22,3 +22,8 @@ for ROC_FILE in 2022/*.roc; do
     $ROC check $ROC_FILE
     $ROC test $ROC_FILE
 done
+
+for ROC_FILE in 2023/*.roc; do
+    $ROC check $ROC_FILE
+    $ROC test $ROC_FILE
+done

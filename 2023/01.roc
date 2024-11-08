@@ -1,12 +1,25 @@
-interface S2023.D01
-    exposes [solution]
-    imports [
-        AoC,
-        "2023-01.txt" as puzzleInput : Str,
-    ]
+app [main] {
+    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.16.0/O00IPk-Krg_diNS2dVWlI0ZQP794Vctxzv0ha96mK0E.tar.br",
+    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.1.0/DcTQw_U67F22cX7pgx93AcHz_ShvHRaFIFjcijF3nz0.tar.br",
+}
 
-solution : AoC.Solution
-solution = { year: 2023, day: 1, title: "Trebuchet?!", part1, part2, puzzleInput }
+import pf.Stdin
+import pf.Stdout
+import pf.Utc
+import aoc.AoC {
+    stdin: Stdin.readToEnd,
+    stdout: Stdout.write,
+    time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
+}
+
+main =
+    AoC.solve {
+        year: 2023,
+        day: 1,
+        title: "Trebuchet?!",
+        part1,
+        part2,
+    }
 
 exampleInputPart1 =
     """
@@ -37,7 +50,7 @@ part1 = \input ->
         |> List.map \bytes -> bytes |> List.keepIf isDigit
         |> List.map toCalibration
 
-    Ok "The sum of all of the calibration values \(vals |> List.sum |> Num.toStr)"
+    Ok "The sum of all of the calibration values $(vals |> List.sum |> Num.toStr)"
 
 expect part1 exampleInputPart1 == Ok "The sum of all of the calibration values 142"
 
@@ -52,7 +65,7 @@ part2 = \input ->
         |> List.map toCalibration
         |> List.sum
 
-    Ok "The sum of all of the calibration values \(Num.toStr sum)"
+    Ok "The sum of all of the calibration values $(Num.toStr sum)"
 
 expect part2 exampleInputPart2 == Ok "The sum of all of the calibration values 281"
 
@@ -84,4 +97,3 @@ takeDigits = \{ digits, rest } ->
         ['e', 'i', 'g', 'h', 't', ..] -> takeDigits { digits: List.append digits '8', rest: List.dropFirst rest 1 }
         ['n', 'i', 'n', 'e', ..] -> takeDigits { digits: List.append digits '9', rest: List.dropFirst rest 1 }
         _ -> takeDigits { digits, rest: List.dropFirst rest 1 }
-

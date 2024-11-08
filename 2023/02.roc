@@ -1,22 +1,33 @@
-interface S2023.D02
-    exposes [solution]
-    imports [
-        AoC,
-        Parser.Core.{ Parser, const, map, keep, skip, oneOf, sepBy },
-        Parser.String.{ parseStr, string, digits, codeunit },
-        "2023-02.txt" as puzzleInput : Str,
-    ]
+app [main] {
+    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.16.0/O00IPk-Krg_diNS2dVWlI0ZQP794Vctxzv0ha96mK0E.tar.br",
+    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.1.0/DcTQw_U67F22cX7pgx93AcHz_ShvHRaFIFjcijF3nz0.tar.br",
+    parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/0.8.0/PCkJq9IGyIpMfwuW-9hjfXd6x-bHb1_OZdacogpBcPM.tar.br",
+}
 
-solution : AoC.Solution
-solution = { year: 2023, day: 2, title: "Cube Conundrum", part1, part2, puzzleInput }
+import pf.Stdin
+import pf.Stdout
+import pf.Utc
+import aoc.AoC {
+    stdin: Stdin.readToEnd,
+    stdout: Stdout.write,
+    time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
+}
+import parser.String exposing [string, digits, parseStr, codeunit]
+import parser.Parser exposing [Parser, map, sepBy, const, keep, skip, oneOf]
 
-part1 : Str -> Result Str [NotImplemented, Error Str]
+main =
+    AoC.solve {
+        year: 2023,
+        day: 2,
+        title: "Cube Conundrum",
+        part1,
+        part2,
+    }
+
+part1 : Str -> Result Str _
 part1 = \input ->
 
-    games <-
-        parseStr (sepBy parseGame (codeunit '\n')) input
-        |> Result.mapErr \_ -> Error "unable to parse input"
-        |> Result.try
+    games = parseStr? (sepBy parseGame (codeunit '\n')) input
 
     ids =
         List.walkWithIndex games [] \validGames, game, idx ->
@@ -25,25 +36,23 @@ part1 = \input ->
             else
                 validGames
 
-    Ok "The sum of the IDs is \(ids |> List.sum |> Num.toStr)"
+    Ok "The sum of the IDs is $(ids |> List.sum |> Num.toStr)"
 
-part2 : Str -> Result Str [NotImplemented, Error Str]
+part2 : Str -> Result Str _
 part2 = \input ->
-    games <-
-        parseStr (sepBy parseGame (codeunit '\n')) input
-        |> Result.mapErr \_ -> Error "unable to parse input"
-        |> Result.try
+
+    games = parseStr? (sepBy parseGame (codeunit '\n')) input
 
     totalPower =
-        sum, game, _ <- games |> List.walkWithIndex 0
+        List.walkWithIndex games 0 \sum, game, _ ->
 
-        { red, green, blue } = calcGameMinCubeSet game
+            { red, green, blue } = calcGameMinCubeSet game
 
-        power = red * green * blue
+            power = red * green * blue
 
-        sum + power
+            sum + power
 
-    Ok "The sum of the power is \(Num.toStr totalPower)"
+    Ok "The sum of the power is $(Num.toStr totalPower)"
 
 parseNumberColor : Parser (List U8) [Red U32, Green U32, Blue U32]
 parseNumberColor =
