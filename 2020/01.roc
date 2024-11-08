@@ -1,15 +1,13 @@
 app [main] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.15.0/SlwdbJ-3GR7uBWQo6zlmYWNYOxnvo8r6YABXD-45UOw.tar.br",
+    pf: platform "../../basic-cli/platform/main.roc",
     aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.1.0/DcTQw_U67F22cX7pgx93AcHz_ShvHRaFIFjcijF3nz0.tar.br",
-    json: "https://github.com/lukewilliamboswell/roc-json/releases/download/0.10.2/FH4N0Sw-JSFXJfG3j54VEDPtXOoN-6I9v_IA8S18IGk.tar.br",
 }
 
 import pf.Stdin
 import pf.Stdout
 import pf.Utc
-import json.Json
 import aoc.AoC {
-    stdin: Stdin.bytes,
+    stdin: Stdin.readToEnd,
     stdout: Stdout.write,
     time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
 }
@@ -23,58 +21,64 @@ main =
         part2,
     }
 
-
 part1 : Str -> Result Str Str
 part1 = \input ->
-    { numbers, rest } = parseNumbers { numbers: [], rest: Str.toUtf8 input }
 
-    expect List.isEmpty rest
+    numbers : List U128
+    numbers = parse input
 
+    combined : List { x : U128, y : U128, mul : U128 }
     combined =
         List.joinMap numbers \x ->
-            List.map numbers \y ->
-                { x, y, sum: x + y, mul: x * y }
+            List.keepOks numbers \y ->
+                if (x + y) == 2020 then
+                    Ok { x, y, mul: x * y }
+                else
+                    Err NotValid
 
-    when List.keepIf combined \c -> c.sum == 2020 is
-        [first, ..] -> Ok "$(Num.toStr first.x) * $(Num.toStr first.y) = $(Num.toStr first.mul)"
-        _ -> Err "expected at least one pair to have sum of 2020"
+    combined
+    |> List.first
+    |> Result.map \{ x, y, mul } -> "$(Num.toStr x) * $(Num.toStr y) = $(Num.toStr mul)"
+    |> Result.mapErr \_ -> "Expected at least one pair to have sum of 2020"
 
 part2 : Str -> Result Str Str
 part2 = \input ->
-    { numbers, rest } = parseNumbers { numbers: [], rest: Str.toUtf8 input }
 
-    expect List.isEmpty rest
+    numbers : List U128
+    numbers = parse input
 
+    combined : List { x : U128, y : U128, z : U128, mul : U128 }
     combined =
-        List.joinMap  numbers \x ->
+        List.joinMap numbers \x ->
             List.joinMap numbers \y ->
-                List.map numbers \z ->
-                    { x, y, z, sum: x + y + z, mul: x * y * z }
+                List.keepOks numbers \z ->
+                    if (x + y + z) == 2020 then
+                        Ok { x, y, z, mul: x * y * z }
+                    else
+                        Err NotValid
 
-    when List.keepIf combined \c -> c.sum == 2020 is
-        [first, ..] -> Ok "$(Num.toStr first.x) * $(Num.toStr first.y) * $(Num.toStr first.z) = $(Num.toStr first.mul)"
-        _ -> Err "expected at least one triple to have sum of 2020"
+    combined
+    |> List.first
+    |> Result.map \{ x, y, z, mul } -> "$(Num.toStr x) * $(Num.toStr y) * $(Num.toStr z) = $(Num.toStr mul)"
+    |> Result.mapErr \_ -> "Expected at least one triple to have sum of 2020"
 
-parseNumbers = \{ numbers, rest } ->
-    if List.isEmpty rest then
-        { numbers, rest }
-    else
-        decodeResult : Decode.DecodeResult U64
-        decodeResult = Decode.fromBytesPartial rest Json.utf8
-
-        when decodeResult.result is
-            Ok n -> parseNumbers { numbers: List.append numbers n, rest: decodeResult.rest }
-            Err _ -> parseNumbers { numbers, rest: List.dropFirst rest 1 }
+parse : Str -> List U128
+parse = \input ->
+    input
+    |> Str.split "\n"
+    |> List.keepOks Str.toU128
 
 expect
-    result = part1 sampleBytes
+    result = part1 example
     result == Ok "1721 * 299 = 514579"
 
 expect
-    result = part2 sampleBytes
+    result = part2 example
     result == Ok "979 * 366 * 675 = 241861950"
 
-sampleBytes =
+expect parse example == [1721, 979, 366, 299, 675, 1456]
+
+example =
     """
     1721
     979
