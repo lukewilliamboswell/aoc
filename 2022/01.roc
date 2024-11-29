@@ -1,6 +1,6 @@
 app [main] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.16.0/O00IPk-Krg_diNS2dVWlI0ZQP794Vctxzv0ha96mK0E.tar.br",
-    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.1.0/DcTQw_U67F22cX7pgx93AcHz_ShvHRaFIFjcijF3nz0.tar.br",
+    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br",
+    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.2.0/tlS1ZkwSKSB87_3poSOXcwHyySe0WxWOWQbPmp7rxBw.tar.br",
 }
 
 import pf.Stdin
@@ -81,10 +81,10 @@ expect part2 exampleInput == Ok "Total kCal the Elves are carrying is 45000"
 parse : Str -> List (List U64)
 parse = \str ->
     str
-    |> Str.split "\n\n"
+    |> Str.splitOn "\n\n"
     |> List.map \inventory ->
         inventory
-        |> Str.split "\n"
+        |> Str.splitOn "\n"
         |> List.keepOks Str.toU64
 
 expect parse exampleInput == [[1000, 2000, 3000], [4000], [5000, 6000], [7000, 8000, 9000], [10000]]

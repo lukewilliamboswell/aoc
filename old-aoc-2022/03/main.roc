@@ -1,5 +1,5 @@
 app "aoc"
-    packages { 
+    packages {
         pf: "https://github.com/roc-lang/basic-cli/releases/download/0.6.0/QOQW08n38nHHrVVkJNiPIjzjvbR3iMjXeFY5w1aT46w.tar.br",
         parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/0.2.0/dJQSsSmorujhiPNIvJKlQoI92RFIG_JQwUfIxZsCSwE.tar.br",
     }
@@ -11,11 +11,11 @@ app "aoc"
     ]
     provides [main] to pf
 
-main = 
+main =
     input = fileContents |> List.append '\n'
     parser = many rucksackParser
-    answer = 
-        rucksacks <- parse parser input List.isEmpty |> Result.map 
+    answer =
+        rucksacks <- parse parser input List.isEmpty |> Result.map
 
         part1 =
             rucksacks
@@ -44,7 +44,7 @@ main =
 
             Stderr.line "Parsing incomplete \(ls)"
 
-    
+
 
 RuckSack : { leftCompartnent : List RuckSackItem, rightCompartnent : List RuckSackItem }
 RuckSackGroup : { first : List RuckSackItem, second : List RuckSackItem, third : List RuckSackItem }
@@ -83,7 +83,7 @@ typesInBothCompartments = \{ leftCompartnent, rightCompartnent } ->
 detectGroupType : RuckSackGroup -> Set RuckSackItem
 detectGroupType = \{ first, second, third } ->
     commonItems, item <- List.walk first (Set.empty {})
-        
+
     inSecond = List.contains second item
     inThird = List.contains third item
 
@@ -95,7 +95,7 @@ detectGroupType = \{ first, second, third } ->
 rucksackParser : Parser (List U8) RuckSack
 rucksackParser =
     const (\items -> \_ ->
-                { before, others } = List.split items (List.len items // 2)
+                { before, others } = List.splitOn items (List.len items // 2)
 
                 { leftCompartnent: before, rightCompartnent: others }
     )
@@ -105,7 +105,7 @@ rucksackParser =
 rucksaskItemParser : Parser (List U8) RuckSackItem
 rucksaskItemParser =
     input <- buildPrimitiveParser
-    
+
     when List.first input is
         Ok x ->
             if x >= 'a' && x <= 'z' then
@@ -121,7 +121,7 @@ rucksaskItemParser =
 codepoint : U8 -> Parser (List U8) U8
 codepoint = \x ->
     input <- buildPrimitiveParser
-    
+
     when List.first input is
         Ok value ->
             if x == value then

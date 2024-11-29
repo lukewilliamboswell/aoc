@@ -1,5 +1,5 @@
 app "aoc"
-    packages { 
+    packages {
         pf: "https://github.com/roc-lang/basic-cli/releases/download/0.6.0/QOQW08n38nHHrVVkJNiPIjzjvbR3iMjXeFY5w1aT46w.tar.br",
         json: "https://github.com/lukewilliamboswell/roc-json/releases/download/0.5.0/jEPD_1ZLFiFrBeYKiKvHSisU-E3LZJeenfa9nvqJGeE.tar.br",
         parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/0.2.0/dJQSsSmorujhiPNIvJKlQoI92RFIG_JQwUfIxZsCSwE.tar.br",
@@ -41,7 +41,7 @@ State : {
 
 initState : State
 initState = {
-    cycle : 0, 
+    cycle : 0,
     register : 1,
     history : [],
     current : NOOP,
@@ -58,16 +58,16 @@ part1 = \instructions ->
     |> \answer -> "sum of signal strength is \(answer)"
 
 part2 = \instructions ->
-    List.walk instructions initState reduceInstructions 
+    List.walk instructions initState reduceInstructions
     |> .history
-    |> renderPixels    
+    |> renderPixels
     |> \answer -> "\n\(answer)"
 
 filterSignalStrength = \history ->
-    check = \{cycle} -> 
+    check = \{cycle} ->
         List.range {start : At 20, end : At 220, step : 40}
         |> List.contains cycle
-    
+
     List.keepIf history check
 
 reduceInstructions = \state, instruction ->
@@ -86,7 +86,7 @@ tick = \state ->
 
     cycle = state.cycle + 1
 
-    offset = when P cyclesRemaining current is 
+    offset = when P cyclesRemaining current is
         P 0 (ADDX value) -> value
         _ -> 0
 
@@ -99,34 +99,34 @@ tick = \state ->
     cyclesRemaining = state.cyclesRemaining - 1
 
     if cyclesRemaining == 0 then
-        { cycle, register, history, current, cyclesRemaining } 
+        { cycle, register, history, current, cyclesRemaining }
     else
-        tick { cycle, register, history, current, cyclesRemaining } 
+        tick { cycle, register, history, current, cyclesRemaining }
 
 toPixels : List Sample -> List Str
 toPixels = \samples ->
     {cycle, start} <- List.map samples
 
     position = (cycle - 1) % 40
-    
-    drawSprite = 
+
+    drawSprite =
         List.range {start : At (start - 1), end : At (start + 1)}
         |> List.contains position
-    
-    if drawSprite then 
+
+    if drawSprite then
         "#"
-    else 
+    else
         "."
 
 renderPixels : List Sample -> Str
-renderPixels = \samples -> 
+renderPixels = \samples ->
     toPixels samples
     |> List.walk {buffer:"", index : 0} \state, pixel ->
-    
-        buffer = 
+
+        buffer =
             if index % 40 == 0 then
                 Str.concat state.buffer "\(pixel)\n"
-            else 
+            else
                 Str.concat state.buffer pixel
 
         index = state.index + 1
@@ -135,23 +135,23 @@ renderPixels = \samples ->
 
     |> .buffer
 
-parse : Str -> List Instruction 
+parse : Str -> List Instruction
 parse = \input ->
     input
-    |> Str.split "\n"
-    |> List.map \line -> Str.split line " "
+    |> Str.splitOn "\n"
+    |> List.map \line -> Str.splitOn line " "
     |> List.map \line ->
-        when line is 
+        when line is
             ["noop"] -> NOOP
             ["addx", value] -> ADDX (toI32OrCrash value)
             _ -> crash "unexpected input"
 
 toI32OrCrash = \numStr ->
-    when Str.toI32 numStr is 
+    when Str.toI32 numStr is
         Ok n -> n
         Err InvalidNumStr -> crash "invalid num string"
 
-smallSample = "noop\naddx 3\naddx -5"  
+smallSample = "noop\naddx 3\naddx -5"
 smaleInstructions = parse smallSample
 expect smaleInstructions == [NOOP, ADDX 3, ADDX -5]
 
@@ -160,6 +160,6 @@ biggerInstructions = parse biggerSample
 
 # For debugging
 stateToStr = \state ->
-    when Str.fromUtf8 (Encode.toBytes state json) is 
+    when Str.fromUtf8 (Encode.toBytes state json) is
         Ok str -> str
         Err _ -> crash "unable to encode state to Json"

@@ -1,5 +1,5 @@
 app "aoc"
-    packages { 
+    packages {
         pf: "https://github.com/roc-lang/basic-cli/releases/download/0.6.0/QOQW08n38nHHrVVkJNiPIjzjvbR3iMjXeFY5w1aT46w.tar.br",
         json: "https://github.com/lukewilliamboswell/roc-json/releases/download/0.5.0/jEPD_1ZLFiFrBeYKiKvHSisU-E3LZJeenfa9nvqJGeE.tar.br",
         parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/0.2.0/dJQSsSmorujhiPNIvJKlQoI92RFIG_JQwUfIxZsCSwE.tar.br",
@@ -20,7 +20,7 @@ main =
     # Part 1
     {} <- print (withColor "Part 1 Sample:" Green) (process sampleMoves 1) |> Task.await
     {} <- print (withColor "Part 1 File:" Green) (process fileMoves 1) |> Task.await
-    
+
     # Part 2
     {} <- print (withColor "Part 2 Sample:" Green) (process sampleMoves 9) |> Task.await
     {} <- print (withColor "Part 2 Bigger Example:" Green) (process biggerExampleMoves 9) |> Task.await
@@ -59,9 +59,9 @@ process = \moves, tailCount ->
     |> \i -> "number of visits is \(i)"
 
 reduceMoves = \state, {direction, count} ->
-    if count == 0 then 
-        state 
-    else 
+    if count == 0 then
+        state
+    else
         # Head moves
         head = when direction is
             Right -> { x : state.head.x + 1, y : state.head.y }
@@ -70,11 +70,11 @@ reduceMoves = \state, {direction, count} ->
             Down -> { x : state.head.x, y : state.head.y - 1 }
 
         # Move tails
-        tails = 
-            List.walk state.tails {leader : head, tails : []} reduceTails 
+        tails =
+            List.walk state.tails {leader : head, tails : []} reduceTails
             |> .tails
 
-        visits = when List.last tails is 
+        visits = when List.last tails is
             Ok lastTail -> Set.insert state.visits lastTail
             Err _ -> crash "expected at least one tail"
 
@@ -88,34 +88,34 @@ reduceTails = \{leader, tails}, tail ->
         GT -> 1
         EQ -> 0
 
-    updatedTail = 
+    updatedTail =
         if abs distX <= 1 && abs distY <= 1 then
-            tail 
+            tail
         else
-            { 
-                x : tail.x + step leader.x tail.x, 
-                y : tail.y + step leader.y tail.y 
+            {
+                x : tail.x + step leader.x tail.x,
+                y : tail.y + step leader.y tail.y
             }
-    
+
     {
-        leader : updatedTail, 
+        leader : updatedTail,
         tails : List.append tails updatedTail,
     }
 
-parse : Str -> List Move 
+parse : Str -> List Move
 parse = \input ->
     input
-    |> Str.split "\n"
-    |> List.map \line -> Str.split line " "
+    |> Str.splitOn "\n"
+    |> List.map \line -> Str.splitOn line " "
     |> List.map \line ->
-        when line is 
+        when line is
             ["R", moves] -> {direction : Right,count : toNatOrCrash moves}
             ["L", moves] -> {direction : Left,count : toNatOrCrash moves}
             ["U", moves] -> {direction : Up,count : toNatOrCrash moves}
             ["D", moves] -> {direction : Down,count : toNatOrCrash moves}
             _ -> crash "unexpected input"
 
-sampleInput = "R 4\nU 4\nL 3\nD 1\nR 4\nD 1\nL 5\nR 2"  
+sampleInput = "R 4\nU 4\nL 3\nD 1\nR 4\nD 1\nL 5\nR 2"
 biggerExampleInput = "R 5\nU 8\nL 8\nD 3\nR 17\nD 10\nL 25\nU 20"
 
 sampleMoves = parse sampleInput
@@ -133,11 +133,11 @@ expect sampleMoves == [
     ]
 
 toNatOrCrash = \numStr ->
-    when Str.toNat numStr is 
+    when Str.toNat numStr is
         Ok n -> n
         Err InvalidNumStr -> crash "invalid num string"
 
-abs : I32 -> U32 
+abs : I32 -> U32
 abs = \x -> if x >= 0 then Num.toU32 x else Num.toU32 (-1*x)
 
 expect abs -2 == 2
@@ -145,14 +145,14 @@ expect abs 0 == 0
 
 # For debugging
 stateToStr = \state ->
-    
+
     # Set which doesnt implement encoding??
     encodableState = {
-        head: state.head, 
+        head: state.head,
         tail: state.tail,
         visits : Set.toList state.visits
     }
 
-    when Str.fromUtf8 (Encode.toBytes encodableState json) is 
+    when Str.fromUtf8 (Encode.toBytes encodableState json) is
         Ok str -> str
         Err _ -> crash "unable to encode state to Json"
