@@ -24,23 +24,10 @@ main =
         part2,
     }
 
-exampleInputPart1 =
-    """
-    3   4
-    4   3
-    2   5
-    1   3
-    3   9
-    3   3
-    """
-
-exampleInputPart2 =
-    """"""
-
 part1 : Str -> Result Str _
 part1 = \input ->
 
-    numbers : List {first: U64, second: U64}
+    numbers : List { first : U64, second : U64 }
     numbers =
         parseStr (sepBy parseLocationIds (codeunit '\n')) (Str.trim input)
         |> Result.mapErr ParseError
@@ -55,26 +42,51 @@ part1 = \input ->
     Ok "The total distance between the lists is $(Num.toStr distance)."
 
 expect
-    a = part1 exampleInputPart1
+    a = part1 exampleInput
     a == Ok "The total distance between the lists is 11."
 
-part2 : Str -> Result Str [NotImplemented, Error Str]
-part2 = \_input ->
-    Err NotImplemented
+part2 : Str -> Result Str _
+part2 = \input ->
 
-#expect part2 exampleInputPart2 == Ok "The sum of all of the calibration values 281"
+    numbers : List { first : U64, second : U64 }
+    numbers =
+        parseStr (sepBy parseLocationIds (codeunit '\n')) (Str.trim input)
+        |> Result.mapErr ParseError
+        |> try
 
-parseLocationIds : Parser (List U8) {first: U64, second: U64}
+    sortedLists : (List U64, List U64)
+    sortedLists = splitAndSort numbers
+
+    similarity : U64
+    similarity = calcSimilarity sortedLists 0
+
+    Ok "The similarity score is $(Num.toStr similarity)."
+
+expect
+    a = part2 exampleInput
+    a == Ok "The similarity score is 31."
+
+exampleInput =
+    """
+    3   4
+    4   3
+    2   5
+    1   3
+    3   9
+    3   3
+    """
+
+parseLocationIds : Parser (List U8) { first : U64, second : U64 }
 parseLocationIds =
     { Parser.map2 <-
         first: digits,
-        _ : string "   ",
+        _: string "   ",
         second: digits,
     }
 
-expect parseStr parseLocationIds "3   4" == Ok {first: 3, second: 4}
+expect parseStr parseLocationIds "3   4" == Ok { first: 3, second: 4 }
 
-splitAndSort : List {first: U64, second: U64} -> (List U64, List U64)
+splitAndSort : List { first : U64, second : U64 } -> (List U64, List U64)
 splitAndSort = \numbers ->
     first = numbers |> List.map .first |> List.sortAsc
     second = numbers |> List.map .second |> List.sortAsc
@@ -82,8 +94,19 @@ splitAndSort = \numbers ->
     (first, second)
 
 calcDistance : (List U64, List U64), U64 -> U64
-calcDistance = \(first, second), acc ->
+calcDistance = \(first, second), score ->
     when (first, second) is
-        ([], []) -> acc
-        ([a, .. as restA], [b, .. as restB]) -> calcDistance (restA, restB) (acc + (Num.absDiff a b))
+        ([], []) -> score
+        ([a, .. as restA], [b, .. as restB]) -> calcDistance (restA, restB) (score + (Num.absDiff a b))
         _ -> crash "expected input lists to be the same length"
+
+calcSimilarity : (List U64, List U64), U64 -> U64
+calcSimilarity = \(first, second), score ->
+    when first is
+        [] -> score
+        [a, .. as restA] ->
+            count = second |> List.countIf \b -> a == b
+
+            increment = a * count
+
+            calcSimilarity (restA, second) (score + increment)
