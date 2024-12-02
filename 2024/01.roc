@@ -15,56 +15,31 @@ import aoc.AoC {
     time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
 }
 
-main =
-    AoC.solve {
-        year: 2024,
-        day: 1,
-        title: "Historian Hysteria",
-        part1,
-        part2,
-    }
+main = AoC.solve { year: 2024, day: 1, title: "Historian Hysteria", part1, part2 }
 
-part1 : Str -> Result Str _
 part1 = \input ->
 
-    numbers : List { first : U64, second : U64 }
-    numbers =
-        parseStr (sepBy parseLocationIds (codeunit '\n')) (Str.trim input)
-        |> Result.mapErr ParseError
-        |> try
+    numbers = try parseStr (sepBy parseLocationIds (codeunit '\n')) (Str.trim input)
 
-    sortedLists : (List U64, List U64)
     sortedLists = splitAndSort numbers
 
-    distance : U64
     distance = calcDistance sortedLists 0
 
     Ok "The total distance between the lists is $(Num.toStr distance)."
 
-expect
-    a = part1 exampleInput
-    a == Ok "The total distance between the lists is 11."
+expect part1 exampleInput == Ok "The total distance between the lists is 11."
 
-part2 : Str -> Result Str _
 part2 = \input ->
 
-    numbers : List { first : U64, second : U64 }
-    numbers =
-        parseStr (sepBy parseLocationIds (codeunit '\n')) (Str.trim input)
-        |> Result.mapErr ParseError
-        |> try
+    numbers = try parseStr (sepBy parseLocationIds (codeunit '\n')) (Str.trim input)
 
-    sortedLists : (List U64, List U64)
     sortedLists = splitAndSort numbers
 
-    similarity : U64
     similarity = calcSimilarity sortedLists 0
 
     Ok "The similarity score is $(Num.toStr similarity)."
 
-expect
-    a = part2 exampleInput
-    a == Ok "The similarity score is 31."
+expect part2 exampleInput == Ok "The similarity score is 31."
 
 exampleInput =
     """
