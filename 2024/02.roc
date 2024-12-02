@@ -108,45 +108,15 @@ expect isSafe [1, 3, 6, 7, 9]
 
 isIncreasingSafelyTolerant : List U64 -> Bool
 isIncreasingSafelyTolerant = \levels ->
-    when levels is
-        [first, .. as rest] ->
-            List.walkUntil rest (Ok (NilFail first)) \maybePrev, curr ->
-                when unwrap maybePrev is
-                    NilFail prev ->
-                        if curr > prev && safeDifference curr prev then
-                            Continue (Ok (NilFail curr))
-                        else
-                            Continue (Ok (OneFail prev))
-
-                    OneFail prev ->
-                        if curr > prev && safeDifference curr prev then
-                            Continue (Ok (OneFail curr))
-                        else
-                            Break (Err {})
-            |> Result.isOk
-
-        _ -> crash "expected at least one level"
+    List.range { start: At 0, end: Before (List.len levels) }
+    |> List.countIf \idx -> isIncreasingSafely (List.dropAt levels idx)
+    |> Num.isGt 0
 
 isDecreasingSafelyTolerant : List U64 -> Bool
 isDecreasingSafelyTolerant = \levels ->
-    when levels is
-        [first, .. as rest] ->
-            List.walkUntil rest (Ok (NilFail first)) \maybePrev, curr ->
-                when unwrap maybePrev is
-                    NilFail prev ->
-                        if curr < prev && safeDifference curr prev then
-                            Continue (Ok (NilFail curr))
-                        else
-                            Continue (Ok (OneFail prev))
-
-                    OneFail prev ->
-                        if curr < prev && safeDifference curr prev then
-                            Continue (Ok (OneFail curr))
-                        else
-                            Break (Err {})
-            |> Result.isOk
-
-        _ -> crash "expected at least one level"
+    List.range { start: At 0, end: Before (List.len levels) }
+    |> List.countIf \idx -> isDecreasingSafely (List.dropAt levels idx)
+    |> Num.isGt 0
 
 isSafeTolerant = \levels -> isIncreasingSafelyTolerant levels || isDecreasingSafelyTolerant levels
 
