@@ -15,28 +15,32 @@ import aoc.AoC {
     time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
 }
 
+Op : [Mul U64 U64, Do, Dont]
+
 main = AoC.solve { year: 2024, day: 3, title: "Mull It Over", part1, part2 }
 
+part1 : Str -> Result Str []
 part1 = \input ->
-    Str.toUtf8 input
-    |> parse []
+    parse (Str.toUtf8 input) []
     |> List.map \op ->
         when op is
             Mul a b -> a * b
             Do -> 0
             Dont -> 0
     |> List.sum
-    |> \sum -> Ok "$(Num.toStr sum)"
+    |> Num.toStr
+    |> Ok
 
 expect
     result = part1 exampleInputPart1
     result == Ok "161"
 
+part2 : Str -> Result Str []
 part2 = \input ->
-    Str.toUtf8 input
-    |> parse []
+    parse (Str.toUtf8 input) []
     |> eval Bool.true 0
-    |> \sum -> Ok "$(Num.toStr sum)"
+    |> Num.toStr
+    |> Ok
 
 expect
     result = part2 exampleInputPart2
@@ -44,13 +48,11 @@ expect
 
 exampleInputPart1 = "xmul(2,4)%&mul[3,7]!@^do_not_mul(5,5)+mul(32,64]then(mul(11,8)mul(8,5))"
 exampleInputPart2 = "xmul(2,4)&mul[3,7]!^don't()_mul(5,5)+mul(32,64](mul(11,8)undo()?mul(8,5))"
-exampleOps = [ Mul 2 4, Dont, Mul 5 5, Mul 11 8, Do, Mul 8 5 ]
+exampleOps = [Mul 2 4, Dont, Mul 5 5, Mul 11 8, Do, Mul 8 5]
 
 expect
     ops = parse (Str.toUtf8 exampleInputPart2) []
     ops == exampleOps
-
-Op : [Mul U64 U64, Do, Dont]
 
 parse : List U8, List Op -> List Op
 parse = \input, acc ->
