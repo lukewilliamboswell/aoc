@@ -57,9 +57,48 @@ part1 = \input ->
     |> Num.toStr
     |> Ok
 
-part2 : Str -> Result Str _
-part2 = \_input ->
-    Err TODO
+part2 : Str -> Result Str []
+part2 = \input ->
+
+    array : Array2D [X, M, A, S]
+    array = toArray2D input u8toXMAS
+
+    words : List (List { r : U64, c : U64 })
+    words =
+        Dict.walk array (List.withCapacity 1000) \acc, middle, _ ->
+
+            result =
+                getXmasIdxs middle
+                |> \idxs ->
+                    when List.keepOks idxs \idx -> Dict.get array idx is
+                        # M . M
+                        # . A .
+                        # S . S
+                        [ul, ur, m, dl, dr] if ul == M && ur == M && m == A && dl == S && dr == S -> Ok idxs
+                        # M . S
+                        # . A .
+                        # M . S
+                        [ul, ur, m, dl, dr] if ul == M && ur == S && m == A && dl == M && dr == S -> Ok idxs
+                        # S . S
+                        # . A .
+                        # M . M
+                        [ul, ur, m, dl, dr] if ul == S && ur == S && m == A && dl == M && dr == M -> Ok idxs
+                        # S . M
+                        # . A .
+                        # S . M
+                        [ul, ur, m, dl, dr] if ul == S && ur == M && m == A && dl == S && dr == M -> Ok idxs
+                        _ -> Err NotXMAS
+
+            when result is
+                Ok idxs -> List.concat acc [idxs]
+                Err _ -> acc
+
+    filtered : Set (List { r : U64, c : U64 })
+    filtered = Set.fromList words
+
+    Set.len filtered
+    |> Num.toStr
+    |> Ok
 
 exampleInput =
     """
@@ -78,6 +117,10 @@ exampleInput =
 expect
     result = part1 exampleInput
     result == Ok "18"
+
+expect
+    result = part2 exampleInput
+    result == Ok "9"
 
 Array2D a : Dict { r : U64, c : U64 } a
 
@@ -121,3 +164,13 @@ getIdxInDirection = \current, direction, acc, stepsRemaining ->
 expect
     actual = getIdxInDirection { r: 10, c: 10 } U [{ r: 10, c: 10 }] 3
     actual == [{ c: 10, r: 10 }, { c: 10, r: 9 }, { c: 10, r: 8 }, { c: 10, r: 7 }]
+
+# UL, UR, M, DL, DR
+getXmasIdxs : { r : U64, c : U64 } -> List { r : U64, c : U64 }
+getXmasIdxs = \middle ->
+    []
+    |> List.concat (getIdxInDirection middle UL [] 1)
+    |> List.concat (getIdxInDirection middle UR [] 1)
+    |> List.concat [middle]
+    |> List.concat (getIdxInDirection middle DL [] 1)
+    |> List.concat (getIdxInDirection middle DR [] 1)
