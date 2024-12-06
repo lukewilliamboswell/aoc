@@ -17,9 +17,7 @@ main = AoC.solve { year: 2024, day: 6, title: "Guard Gallivant", part1, part2 }
 part1 : Str -> Result Str []
 part1 = \input ->
 
-    { obstructions , guard, maxR, maxC } = parseMap (Str.trim input)
-
-    #dbg obstructions
+    { obstructions, guard, maxR, maxC } = parseMap (Str.trim input)
 
     outside = \pos -> pos.r < 0 || pos.r > maxR || pos.c < 0 || pos.c > maxC
 
@@ -34,8 +32,6 @@ part1 = \input ->
     allSteps : List Position
     allSteps = walk [guard.pos] guard
 
-    #dbg allSteps
-
     allSteps |> Set.fromList |> Set.len |> Num.toStr |> Ok
 
 expect
@@ -43,13 +39,56 @@ expect
     actual == Ok "41"
 
 part2 : Str -> Result Str _
-part2 = \_input ->
+part2 = \input ->
 
-    Ok ""
+    { obstructions, guard, maxR, maxC } = parseMap (Str.trim input)
 
-#expect
-#    actual = part2 exampleInput
-#    actual == Ok "143"
+    outside = \pos -> pos.r < 0 || pos.r > maxR || pos.c < 0 || pos.c > maxC
+
+    # walk the guard, and detect if there was an obstruction in the next spot, would we be
+    # back on our previous track...
+    walkCheckNextCauseLoop : Set Guard, Guard, List Position -> List Position
+    walkCheckNextCauseLoop = \prev, current, loopSpots ->
+
+        next = stepGuard current obstructions
+
+        obsAtNext = Set.insert obstructions next.pos
+        ifObsAtNext = stepGuard current obsAtNext
+
+        if outside next.pos then
+            loopSpots
+        else if Set.contains prev ifObsAtNext then
+            newLoopStops = List.append loopSpots next.pos
+            walkCheckNextCauseLoop (Set.insert prev next) next newLoopStops
+        else if checkIfLooping current obsAtNext (Set.fromList [current]) outside then
+            newLoopStops = List.append loopSpots next.pos
+            walkCheckNextCauseLoop (Set.insert prev next) next newLoopStops
+        else
+            walkCheckNextCauseLoop (Set.insert prev next) next loopSpots
+
+    spots = walkCheckNextCauseLoop (Set.fromList [guard]) guard []
+
+    spots
+    |> Set.fromList
+    |> Set.len
+    |> Num.toStr
+    |> Ok # 1793 too high ... investigate
+
+checkIfLooping : Guard, Set Position, Set Guard, (Position -> Bool) -> Bool
+checkIfLooping = \current, obstructions, prevs, outside ->
+
+    next = stepGuard current obstructions
+
+    if outside next.pos then
+        Bool.false
+    else if Set.contains prevs next then
+        Bool.true
+    else
+        checkIfLooping next obstructions (Set.insert prevs current) outside
+
+expect
+    actual = part2 exampleInput
+    actual == Ok "6"
 
 stepGuard : Guard, Set Position -> Guard
 stepGuard = \{ facing, pos }, obstructions ->
@@ -72,7 +111,7 @@ stepGuard = \{ facing, pos }, obstructions ->
 Position : { r : U64, c : U64 }
 Guard : { facing : [Up, Down, Left, Right], pos : Position }
 
-parseMap : Str -> { obstructions : Set Position, guard : Guard, maxR: U64, maxC: U64 }
+parseMap : Str -> { obstructions : Set Position, guard : Guard, maxR : U64, maxC : U64 }
 parseMap = \input ->
 
     help : List U8, List Position, Guard, U64, U64, U64, U64 -> _
@@ -129,6 +168,8 @@ expect
         { c: 6, r: 9 },
     ]
     &&
-    maxR == 9
+    maxR
+    == 9
     &&
-    maxC == 9
+    maxC
+    == 9
