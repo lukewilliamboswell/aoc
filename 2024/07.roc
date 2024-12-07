@@ -16,11 +16,14 @@ import aoc.AoC {
 }
 
 Test : { test_value : U64, test_inputs : List U64 }
-Op : [Add, Mul]
+
+Op : [Add, Mul, Con]
+
 Ast : [
     Num U64,
     Add Ast Ast,
     Mul Ast Ast,
+    Con Ast Ast,
 ]
 
 main = AoC.solve { year: 2024, day: 7, title: "Bridge Repair", part1, part2 }
@@ -33,9 +36,9 @@ part1 = \input ->
 
     valid_tests : List Test
     valid_tests =
-        tests
-        |> List.keepIf \test ->
-            find_first_valid_ast test |> Result.isOk
+        List.keepIf tests \test ->
+            k = 2 # Add, Mul
+            find_first_valid_ast test k |> Result.isOk
 
     valid_tests
     |> List.map .test_value
@@ -48,19 +51,31 @@ expect
     actual == Ok "3749"
 
 part2 : Str -> Result Str _
-part2 = \_input ->
+part2 = \input ->
 
-    0 |> Num.toStr |> Ok
+    tests : List Test
+    tests = parseStr? (sepBy parse_test (codeunit '\n')) (Str.trim input)
+
+    valid_tests : List Test
+    valid_tests =
+        List.keepIf tests \test ->
+            k = 3 # Add, Mul, Concat ||
+            find_first_valid_ast test k |> Result.isOk
+
+    valid_tests
+    |> List.map .test_value
+    |> List.sum
+    |> Num.toStr
+    |> Ok
 
 expect
     actual = part2 example_input
-    actual == Ok "6"
+    actual == Ok "11387"
 
-find_first_valid_ast : Test -> Result Ast {}
-find_first_valid_ast = \{ test_value, test_inputs } ->
+find_first_valid_ast : Test, U64 -> Result Ast {}
+find_first_valid_ast = \{ test_value, test_inputs }, k ->
 
     n = List.len test_inputs - 1
-    k = 2 # Add, Mul
 
     combinations : List (List Op)
     combinations = generate_combinations n k |> List.map \cs -> List.map cs from_code
@@ -81,17 +96,14 @@ to_ast = \vals, ops ->
             when op is
                 Add -> Add (Num val) (to_ast restVals restOps)
                 Mul -> Mul (Num val) (to_ast restVals restOps)
+                Con -> Con (Num val) (to_ast restVals restOps)
 
         _ -> crash "unexpected length of ops and vals"
 
-expect
-    a = to_ast [10, 20] [Add]
-    a == Add (Num 20) (Num 10)
-
-# confirm we are building the AST left-to-right
-expect
-    a = to_ast [10, 20, 30] [Mul, Add]
-    a == Add (Num 30) (Mul (Num 20) (Num 10))
+expect to_ast [10, 20] [Add] == Add (Num 20) (Num 10)
+expect to_ast [10, 20, 30] [Mul, Add] == Add (Num 30) (Mul (Num 20) (Num 10))
+expect to_ast [10, 20] [Con] == Con (Num 20) (Num 10)
+expect eval (to_ast [15, 6] [Con]) == 156
 
 generate_combinations : U64, U64 -> List (List U64)
 generate_combinations = \n, k ->
@@ -110,6 +122,7 @@ generate_combinations = \n, k ->
 
 expect generate_combinations 0 0 == [[]]
 expect generate_combinations 2 2 == [[0, 0], [0, 1], [1, 0], [1, 1]]
+expect generate_combinations 2 3 == [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1], [2, 2]]
 expect generate_combinations 3 2 == [[0, 0, 0], [0, 0, 1], [0, 1, 0], [0, 1, 1], [1, 0, 0], [1, 0, 1], [1, 1, 0], [1, 1, 1]]
 
 eval : Ast -> U64
@@ -118,10 +131,21 @@ eval = \node ->
         Num val -> val
         Add a b -> (eval a) + (eval b)
         Mul a b -> (eval a) * (eval b)
+        Con a b -> concat_digits (eval a) (eval b)
 
 expect eval (Num 10) == 10
 expect eval (Add (Num 10) (Num 20)) == 30
 expect eval (Mul (Add (Num 10) (Num 20)) (Num 2)) == 60
+
+# srsly... what is this! who concat's digits !?
+concat_digits : U64, U64 -> U64
+concat_digits = \a, b ->
+    aStr = Num.toStr a
+    bStr = Num.toStr b
+
+    when Str.concat bStr aStr |> Str.toU64 is
+        Ok n -> n
+        Err _ -> crash "concating digits is silly..."
 
 from_code : U64 -> Op
 from_code = \op_code ->
@@ -129,6 +153,8 @@ from_code = \op_code ->
         Add
     else if op_code == 1 then
         Mul
+    else if op_code == 2 then
+        Con
     else
         crash "unexpected op_code"
 
