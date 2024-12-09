@@ -43,13 +43,15 @@ expect
 
 part2 : Str -> Result Str _
 part2 = \_input ->
+
+    # TODO
     0
     |> Num.toStr
     |> Ok
 
-# expect
-#    actual = part2 example_input
-#    actual == Ok ""
+expect
+    actual = part2 example_input
+    actual == Ok "34"
 
 anti_nodes : ({ r : U64, c : U64 }, { r : U64, c : U64 }) -> ({ r : U64, c : U64 }, { r : U64, c : U64 })
 anti_nodes = \(a, b) ->
