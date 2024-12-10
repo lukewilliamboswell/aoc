@@ -37,8 +37,41 @@ expect part1 example_map_3 == Ok "3"
 expect part1 example_map_4 == Ok "36"
 
 part2 : Str -> Result Str _
-part2 = \_input ->
-    Err TODO
+part2 = \input ->
+    map = parse_map (Str.trim input)
+
+    trail_heads =
+        Dict.walk map [] \heads, pos, height ->
+            if height == '0' then
+                List.append heads pos
+            else
+                heads
+
+    List.map trail_heads \head -> rate_trail head map
+    |> List.sum
+    |> Num.toStr
+    |> Ok
+
+expect part2 example_map_5 == Ok "3"
+
+rate_trail : { r : U8, c : U8 }, Dict { r : U8, c : U8 } U8 -> U64
+rate_trail = \head_position, map ->
+
+    help : ({ r : U8, c : U8 }, U8), Set { r : U8, c : U8 }, List { r : U8, c : U8 } -> List (List { r : U8, c : U8 })
+    help = \(position, height), visited, steps ->
+        if height == '9' then
+            [List.append steps position]
+        else if Set.contains visited position then
+            []
+        else
+            updated_visited = Set.insert visited position
+
+            [Up, Down, Left, Right]
+            |> List.keepOks \direction -> step (position, height) direction map
+            |> List.map \next -> help next updated_visited (List.append steps position)
+            |> List.join
+
+    help (head_position, '0') (Set.empty {}) [] |> Set.fromList |> Set.len
 
 score_trail : { r : U8, c : U8 }, Dict { r : U8, c : U8 } U8 -> U64
 score_trail = \head_position, map ->
@@ -174,4 +207,15 @@ example_map_4 =
     32019012
     01329801
     10456732
+    """
+
+example_map_5 =
+    """
+    .....0.
+    ..4321.
+    ..5..2.
+    ..6543.
+    ..7..4.
+    ..8765.
+    ..9....
     """
