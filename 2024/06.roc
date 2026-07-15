@@ -1,4 +1,4 @@
-app [main!] { pf: platform "../../basic-cli/platform/main.roc" }
+app [main!] { pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.21.0-rc3/Cv3oh6aPxqZxDeh1dgnXPjZnYsoqQMvEawa6TUc71sxJ.tar.zst" }
 
 import pf.OsStr
 import pf.Stdin

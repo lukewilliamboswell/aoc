@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Nightly Roc
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out solutions
+        uses: actions/checkout@v4
+
+      - name: Install latest nightly Roc
+        uses: roc-lang/setup-roc@cbe782d6f165b89c87d99f50a59ac4f5f73b4427
+        with:
+          version: nightly-new-compiler
+
+      - name: Show Roc version
+        run: roc version
+
+      - name: Check all solutions
+        env:
+          FORCE_COLOR: 1
+        run: ./ci/all_tests.sh

@@ -5,7 +5,7 @@ Advent of Code solutions grouped by year and day.
 ## Requirements
 
 - A current Roc compiler on `PATH`.
-- A sibling checkout of [`basic-cli`](https://github.com/roc-lang/basic-cli) at `../basic-cli`.
+- Internet access the first time Roc downloads the pinned `basic-cli` platform release.
 
 Solutions read puzzle input from standard input:
 
@@ -24,3 +24,7 @@ Set `ROC` to test with a different compiler binary:
 ```sh
 ROC=/path/to/roc ./ci/all_tests.sh
 ```
+
+The runner allows up to 200 MB of transitive Roc packages for the pinned platform. Override this with `ROC_MAX_TRANSITIVE_MB` if needed.
+
+GitHub Actions runs the same checks against the latest nightly Roc compiler.
