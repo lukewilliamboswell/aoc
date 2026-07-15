@@ -1,156 +1,120 @@
-app [main] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br",
-    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.2.0/tlS1ZkwSKSB87_3poSOXcwHyySe0WxWOWQbPmp7rxBw.tar.br",
-    parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/0.9.0/w8YKp2YAgQt5REYk912HfKAHBjcXsrnvtjI0CBzoAT4.tar.br",
+app [main!] {
+	pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.21.0-rc4/FvCh4vdqm3nBY6DWEfZ8RuGCVfjuMY43HA8KSNk9qVDn.tar.zst",
+	parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/1.0.2/FrnJ4RGDKpQyoDyESNoBwFNviY4ZGbMVLnUjW9tvSRjk.tar.zst",
 }
 
+import pf.OsStr
 import pf.Stdin
 import pf.Stdout
-import pf.Utc
-import aoc.AoC {
-    stdin: Stdin.readToEnd,
-    stdout: Stdout.write,
-    time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
-}
-import parser.String exposing [string, digits, parseStr, codeunit]
-import parser.Parser exposing [Parser, sepBy, const, keep, skip, chompWhile]
+import parser.Parser exposing [Parser]
+import parser.String
 
-main =
-    AoC.solve {
-        year: 2023,
-        day: 4,
-        title: "Scratchcards",
-        part1,
-        part2,
-    }
+Card : { id : U64, winning : List(U64), picks : List(U64) }
 
-exampleInput =
-    """
-    Card 1: 41 48 83 86 17 | 83 86  6 31 17  9 48 53
-    Card 2: 13 32 20 16 61 | 61 30 68 82 17 32 24 19
-    Card 3:  1 21 53 59 44 | 69 82 63 72 16 21 14  1
-    Card 4: 41 92 73 84 69 | 59 84 76 51 58  5 54 83
-    Card 5: 87 83 26 28 32 | 88 30 70 12 93 22 82 36
-    Card 6: 31 18 13 56 72 | 74 77 10 23 35 67 36 11
-    """
-
-part1 : Str -> Result Str _
-part1 = \input ->
-
-    cards = parseStr? (sepBy cardParser (codeunit '\n')) input
-
-    sum = cards |> List.map scoreCard |> List.sum
-
-    Ok "The scratch cards are worth a total of $(Num.toStr sum) points."
-
-expect part1 exampleInput == Ok "The scratch cards are worth a total of 13 points."
-
-part2 : Str -> Result Str _
-part2 = \input ->
-
-    cards = parseStr? (sepBy cardParser (codeunit '\n')) input
-
-    cardsWithWins = cards |> List.map \card -> (card, countWins card)
-
-    initCounts =
-        List.range { start: At 0, end: Before (List.len cards) }
-        |> List.map \_ -> 1 # initiliase to one to include starting scratchy
-
-    counts = List.walk cardsWithWins initCounts countCards
-
-    sum = counts |> List.sum
-
-    Ok "The total number is $(Num.toStr sum) scratchcards."
-
-expect part2 exampleInput == Ok "The total number is 30 scratchcards."
-
-Card : { id : U64, winning : List U64, picks : List U64 }
-CardCounts : List U64 # note card count index == (card.id - 1)
-
-cardParser : Parser (List U8) Card
-cardParser =
-
-    # we need to handle both single and double spaces before digits
-    eatWhitespace = chompWhile \b -> b == ' '
-
-    const (\id -> \winning -> \picks -> { id, winning, picks })
-    |> skip (string "Card")
-    |> skip (eatWhitespace)
-    |> keep (digits)
-    |> skip (string ":")
-    |> skip (eatWhitespace)
-    |> keep (sepBy digits eatWhitespace)
-    |> skip (string " |")
-    |> skip (eatWhitespace)
-    |> keep (sepBy digits eatWhitespace)
-
-exampleCard1 = {
-    id: 1,
-    winning: [41, 48, 83, 86, 17],
-    picks: [83, 86, 6, 31, 17, 9, 48, 53],
+main! : List(OsStr) => Try({}, _)
+main! = |_| {
+	input = Str.from_utf8(Stdin.read_to_end!()?) ? |err| InvalidUtf8(err)
+	answer1 = part1(input) ? |err| SolverFailed(Str.inspect(err))
+	answer2 = part2(input) ? |err| SolverFailed(Str.inspect(err))
+	Stdout.line!("Part 1: ${answer1}")?
+	Stdout.line!("Part 2: ${answer2}")?
+	Ok({})
 }
 
-exampleCard2 = {
-    id: 2,
-    winning: [13, 32, 20, 16, 61],
-    picks: [61, 30, 68, 82, 17, 32, 24, 19],
+part1 : Str -> Try(Str, _)
+part1 = |input| {
+	cards = String.parse_str(parse_card.sep_by(String.codeunit('\n')), input.trim())?
+	Ok("The scratch cards are worth a total of ${cards.map(score_card).sum().to_str()} points.")
 }
 
-expect parseStr cardParser "Card 1: 41 48 83 86 17 | 83 86  6 31 17  9 48 53" == Ok exampleCard1
-expect parseStr cardParser "Card 2: 13 32 20 16 61 | 61 30 68 82 17 32 24 19" == Ok exampleCard2
+## Part one scores the example scratchcards.
+expect part1(example_input) == Ok("The scratch cards are worth a total of 13 points.")
 
-scoreCard : Card -> U64
-scoreCard = \card -> card |> countWins |> calcScore 0
+part2 : Str -> Try(Str, _)
+part2 = |input| {
+	cards = String.parse_str(parse_card.sep_by(String.codeunit('\n')), input.trim())?
+	initial_counts = cards.map(|_| 1)
+	counts = count_all_cards(cards, initial_counts, 0)
+	Ok("The total number is ${counts.sum().to_str()} scratchcards.")
+}
 
-countWins : Card -> U64
-countWins = \card -> countWinsHelp card.picks card.winning 0
+## Part two counts won copies of subsequent scratchcards.
+expect part2(example_input) == Ok("The total number is 30 scratchcards.")
 
-countWinsHelp : List U64, List U64, U64 -> U64
-countWinsHelp = \picks, winning, wins ->
-    next = List.dropFirst picks 1
+parse_card : Parser(String.Utf8, Card)
+parse_card = {
+	spaces = String.codeunit(' ').one_or_more()
+	{
+		id: Parser.const(|id| id).skip(String.string("Card")).skip(spaces).keep(String.digits).skip(String.codeunit(':')).skip(spaces),
+		winning: String.digits.sep_by(spaces).skip(String.string(" |")).skip(spaces),
+		picks: String.digits.sep_by(spaces),
+	}.Parser
+}
 
-    when picks is
-        [] -> wins # base case
-        [p, .. ] ->
-            if List.contains winning p then
-                countWinsHelp next winning (wins + 1)
-            else
-                countWinsHelp next winning wins
+example_card = {
+	id: 1,
+	winning: [41, 48, 83, 86, 17],
+	picks: [83, 86, 6, 31, 17, 9, 48, 53],
+}
 
-calcScore : U64, U64 -> U64
-calcScore = \wins, score ->
-    if wins == 0 then
-        score # base case
-    else if score == 0 then
-        calcScore (wins - 1) 1
-    else
-        calcScore (wins - 1) (score * 2)
+## Card parsing handles variable-width whitespace between numbers.
+expect String.parse_str(parse_card, "Card 1: 41 48 83 86 17 | 83 86  6 31 17  9 48 53") == Ok(example_card)
 
-expect scoreCard exampleCard1 == 8
-expect scoreCard exampleCard2 == 2
+count_wins : Card -> U64
+count_wins = |card| card.picks.count_if(|pick| card.winning.contains(pick))
 
-countCards : CardCounts, (Card, U64) -> CardCounts
-countCards = \counts, (card, wins) ->
+score_card : Card -> U64
+score_card = |card| {
+	wins = count_wins(card)
+	if wins == 0 {
+		0
+	} else {
+		pow_two(wins - 1, 1)
+	}
+}
 
-    idx = card.id - 1
+pow_two : U64, U64 -> U64
+pow_two = |power, result| if power == 0 {
+	result
+} else {
+	pow_two(power - 1, result * 2)
+}
 
-    currentCount =
-        when List.get counts idx is
-            Ok c -> c
-            Err OutOfBounds -> crash "got invalid index for card counts"
+## A card with four matches is worth eight points.
+expect score_card(example_card) == 8
 
-    countCardsHelp counts wins currentCount card.id
+count_all_cards : List(Card), List(U64), U64 -> List(U64)
+count_all_cards = |cards, counts, index| match cards.get(index) {
+	Err(_) => counts
+	Ok(card) => {
+		current_count = get_count(counts, index)
+		updated = add_copies(counts, index + 1, count_wins(card), current_count)
+		count_all_cards(cards, updated, index + 1)
+	}
+}
 
-countCardsHelp : CardCounts, U64, U64, U64 -> CardCounts
-countCardsHelp = \counts, winsRemaining, currentCount, currentId ->
-    nextId = currentId + 1
+add_copies : List(U64), U64, U64, U64 -> List(U64)
+add_copies = |counts, index, remaining, amount| {
+	if remaining == 0 or index >= counts.len() {
+		counts
+	} else {
+		updated = counts.update(index, |count| count + amount) ?? counts
+		add_copies(updated, index + 1, remaining - 1, amount)
+	}
+}
 
-    if winsRemaining == 0 then
-        counts
-    else
+get_count : List(U64), U64 -> U64
+get_count = |counts, index| match counts.get(index) {
+	Ok(count) => count
+	Err(_) => {
+		crash "scratchcard count index out of bounds"
+	}
+}
 
-        inc = \c -> c + currentCount
-        idx = nextId - 1
-        updatedCounts = List.update counts idx inc
-
-        countCardsHelp updatedCounts (winsRemaining - 1) currentCount nextId
+example_input = 
+	\\Card 1: 41 48 83 86 17 | 83 86  6 31 17  9 48 53
+	\\Card 2: 13 32 20 16 61 | 61 30 68 82 17 32 24 19
+	\\Card 3:  1 21 53 59 44 | 69 82 63 72 16 21 14  1
+	\\Card 4: 41 92 73 84 69 | 59 84 76 51 58  5 54 83
+	\\Card 5: 87 83 26 28 32 | 88 30 70 12 93 22 82 36
+	\\Card 6: 31 18 13 56 72 | 74 77 10 23 35 67 36 11

@@ -1,186 +1,111 @@
-app [main] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br",
-    parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/0.9.0/w8YKp2YAgQt5REYk912HfKAHBjcXsrnvtjI0CBzoAT4.tar.br",
-    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.2.0/tlS1ZkwSKSB87_3poSOXcwHyySe0WxWOWQbPmp7rxBw.tar.br",
+app [main!] {
+	pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.21.0-rc4/FvCh4vdqm3nBY6DWEfZ8RuGCVfjuMY43HA8KSNk9qVDn.tar.zst",
+	parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/1.0.2/FrnJ4RGDKpQyoDyESNoBwFNviY4ZGbMVLnUjW9tvSRjk.tar.zst",
 }
 
+import pf.OsStr
 import pf.Stdin
 import pf.Stdout
-import pf.Utc
-import parser.String exposing [parseStr, digits, string, codeunit]
-import parser.Parser exposing [Parser, sepBy]
-import aoc.AoC {
-    stdin: Stdin.readToEnd,
-    stdout: Stdout.write,
-    time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
+import parser.Parser exposing [Parser]
+import parser.String
+
+Calibration : { target : U64, inputs : List(U64) }
+
+main! : List(OsStr) => Try({}, _)
+main! = |_| {
+	input = Str.from_utf8(Stdin.read_to_end!()?) ? |err| InvalidUtf8(err)
+	answer1 = part1(input) ? |err| SolverFailed(Str.inspect(err))
+	answer2 = part2(input) ? |err| SolverFailed(Str.inspect(err))
+	Stdout.line!("Part 1: ${answer1}")?
+	Stdout.line!("Part 2: ${answer2}")?
+	Ok({})
 }
 
-Test : { test_value : U64, test_inputs : List U64 }
+part1 : Str -> Try(Str, _)
+part1 = |input| solve(input, Bool.False)
 
-Op : [Add, Mul, Con]
+part2 : Str -> Try(Str, _)
+part2 = |input| solve(input, Bool.True)
 
-Ast : [
-    Num U64,
-    Add Ast Ast,
-    Mul Ast Ast,
-    Con Ast Ast,
-]
+solve : Str, Bool -> Try(Str, _)
+solve = |input, allow_concat| {
+	calibrations = String.parse_str(parse_calibration.sep_by(String.codeunit('\n')), input.trim())?
+	total = calibrations.keep_if(|calibration| calibration_is_valid(calibration, allow_concat)).map(|item| item.target).sum()
+	Ok(total.to_str())
+}
 
-main = AoC.solve { year: 2024, day: 7, title: "Bridge Repair", part1, part2 }
+## Addition and multiplication validate the Part 1 sample calibrations.
+expect part1(example_input) == Ok("3749")
 
-part1 : Str -> Result Str _
-part1 = \input ->
+## Concatenation validates the additional Part 2 calibrations.
+expect part2(example_input) == Ok("11387")
 
-    tests : List Test
-    tests = parseStr? (sepBy parse_test (codeunit '\n')) (Str.trim input)
+calibration_is_valid : Calibration, Bool -> Bool
+calibration_is_valid = |{ target, inputs }, allow_concat| {
+	match inputs {
+		[] => Bool.False
+		[first, .. as rest] => can_reach(target, first, rest, allow_concat)
+	}
+}
 
-    valid_tests : List Test
-    valid_tests =
-        List.keepIf tests \test ->
-            k = 2 # Add, Mul
-            find_first_valid_ast test k |> Result.isOk
+can_reach : U64, U64, List(U64), Bool -> Bool
+can_reach = |target, current, remaining, allow_concat| {
+	match remaining {
+		[] => current == target
+		[next, .. as rest] => {
+			add_matches = can_reach(target, current + next, rest, allow_concat)
+			multiply_matches = can_reach(target, current * next, rest, allow_concat)
+			concat_matches = if allow_concat {
+				match concat_digits(current, next) {
+					Ok(value) => can_reach(target, value, rest, allow_concat)
+					Err(_) => Bool.False
+				}
+			} else {
+				Bool.False
+			}
 
-    valid_tests
-    |> List.map .test_value
-    |> List.sum
-    |> Num.toStr
-    |> Ok
+			add_matches or multiply_matches or concat_matches
+		}
+	}
+}
 
-expect
-    actual = part1 example_input
-    actual == Ok "3749"
+## Addition can satisfy a two-input calibration.
+expect calibration_is_valid({ target: 190, inputs: [10, 180] }, Bool.False)
 
-part2 : Str -> Result Str _
-part2 = \input ->
+## Multiplication can satisfy a two-input calibration.
+expect calibration_is_valid({ target: 190, inputs: [10, 19] }, Bool.False)
 
-    tests : List Test
-    tests = parseStr? (sepBy parse_test (codeunit '\n')) (Str.trim input)
+## Concatenation is disabled for Part 1.
+expect !calibration_is_valid({ target: 156, inputs: [15, 6] }, Bool.False)
 
-    valid_tests : List Test
-    valid_tests =
-        List.keepIf tests \test ->
-            k = 3 # Add, Mul, Concat ||
-            find_first_valid_ast test k |> Result.isOk
+## Concatenation is enabled for Part 2.
+expect calibration_is_valid({ target: 156, inputs: [15, 6] }, Bool.True)
 
-    valid_tests
-    |> List.map .test_value
-    |> List.sum
-    |> Num.toStr
-    |> Ok
+concat_digits : U64, U64 -> Try(U64, _)
+concat_digits = |left, right| U64.from_str("${left.to_str()}${right.to_str()}")
 
-expect
-    actual = part2 example_input
-    actual == Ok "11387"
+## Decimal concatenation joins the right value after the left value.
+expect concat_digits(15, 6) == Ok(156)
 
-find_first_valid_ast : Test, U64 -> Result Ast {}
-find_first_valid_ast = \{ test_value, test_inputs }, k ->
+parse_calibration : Parser(String.Utf8, Calibration)
+parse_calibration = {
+	target: String.digits.skip(String.string(": ")),
+	inputs: String.digits.sep_by(String.codeunit(' ')),
+}.Parser
 
-    n = List.len test_inputs - 1
+## Calibration parsing separates the target from its inputs.
+expect String.parse_str(parse_calibration, "190: 10 19") == Ok({ target: 190, inputs: [10, 19] })
 
-    combinations : List (List Op)
-    combinations = generate_combinations n k |> List.map \cs -> List.map cs from_code
+## Calibration parsing accepts longer input lists.
+expect String.parse_str(parse_calibration, "21037: 9 7 18 13") == Ok({ target: 21037, inputs: [9, 7, 18, 13] })
 
-    List.walkUntil combinations (Err {}) \state, cs ->
-        ast = to_ast test_inputs cs
-
-        if eval ast == test_value then
-            Break (Ok ast)
-        else
-            Continue state
-
-to_ast : List U64, List Op -> Ast
-to_ast = \vals, ops ->
-    when (vals, ops) is
-        ([val], []) -> Num val
-        ([.. as restVals, val], [.. as restOps, op]) ->
-            when op is
-                Add -> Add (Num val) (to_ast restVals restOps)
-                Mul -> Mul (Num val) (to_ast restVals restOps)
-                Con -> Con (Num val) (to_ast restVals restOps)
-
-        _ -> crash "unexpected length of ops and vals"
-
-expect to_ast [10, 20] [Add] == Add (Num 20) (Num 10)
-expect to_ast [10, 20, 30] [Mul, Add] == Add (Num 30) (Mul (Num 20) (Num 10))
-expect to_ast [10, 20] [Con] == Con (Num 20) (Num 10)
-expect eval (to_ast [15, 6] [Con]) == 156
-
-generate_combinations : U64, U64 -> List (List U64)
-generate_combinations = \n, k ->
-
-    help = \prefix, remaining ->
-        if remaining == 0 then
-            [prefix]
-        else
-            List.range { start: At 0, end: At (k - 1) }
-            |> List.joinMap \digit ->
-                help
-                    (List.append prefix digit)
-                    (remaining - 1)
-
-    help [] n
-
-expect generate_combinations 0 0 == [[]]
-expect generate_combinations 2 2 == [[0, 0], [0, 1], [1, 0], [1, 1]]
-expect generate_combinations 2 3 == [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1], [2, 2]]
-expect generate_combinations 3 2 == [[0, 0, 0], [0, 0, 1], [0, 1, 0], [0, 1, 1], [1, 0, 0], [1, 0, 1], [1, 1, 0], [1, 1, 1]]
-
-eval : Ast -> U64
-eval = \node ->
-    when node is
-        Num val -> val
-        Add a b -> (eval a) + (eval b)
-        Mul a b -> (eval a) * (eval b)
-        Con a b -> concat_digits (eval a) (eval b)
-
-expect eval (Num 10) == 10
-expect eval (Add (Num 10) (Num 20)) == 30
-expect eval (Mul (Add (Num 10) (Num 20)) (Num 2)) == 60
-
-# srsly... what is this! who concat's digits !?
-concat_digits : U64, U64 -> U64
-concat_digits = \a, b ->
-    aStr = Num.toStr a
-    bStr = Num.toStr b
-
-    when Str.concat bStr aStr |> Str.toU64 is
-        Ok n -> n
-        Err _ -> crash "concating digits is silly..."
-
-from_code : U64 -> Op
-from_code = \op_code ->
-    if op_code == 0 then
-        Add
-    else if op_code == 1 then
-        Mul
-    else if op_code == 2 then
-        Con
-    else
-        crash "unexpected op_code"
-
-expect from_code 0 == Add
-expect from_code 1 == Mul
-
-parse_test : Parser _ Test
-parse_test =
-    { Parser.map2 <-
-        test_value: digits,
-        _: string ": ",
-        test_inputs: sepBy digits (codeunit ' '),
-    }
-
-expect parseStr parse_test "190: 10 19" == Ok { test_value: 190, test_inputs: [10, 19] }
-expect parseStr parse_test "21037: 9 7 18 13" == Ok { test_value: 21037, test_inputs: [9, 7, 18, 13] }
-
-example_input =
-    """
-    190: 10 19
-    3267: 81 40 27
-    83: 17 5
-    156: 15 6
-    7290: 6 8 6 15
-    161011: 16 10 13
-    192: 17 8 14
-    21037: 9 7 18 13
-    292: 11 6 16 20
-    """
+example_input = 
+	\\190: 10 19
+	\\3267: 81 40 27
+	\\83: 17 5
+	\\156: 15 6
+	\\7290: 6 8 6 15
+	\\161011: 16 10 13
+	\\192: 17 8 14
+	\\21037: 9 7 18 13
+	\\292: 11 6 16 20

@@ -1,134 +1,109 @@
-app [main] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br",
-    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.2.0/tlS1ZkwSKSB87_3poSOXcwHyySe0WxWOWQbPmp7rxBw.tar.br",
-    parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/0.9.0/w8YKp2YAgQt5REYk912HfKAHBjcXsrnvtjI0CBzoAT4.tar.br",
+app [main!] {
+	pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.21.0-rc4/FvCh4vdqm3nBY6DWEfZ8RuGCVfjuMY43HA8KSNk9qVDn.tar.zst",
+	parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/1.0.2/FrnJ4RGDKpQyoDyESNoBwFNviY4ZGbMVLnUjW9tvSRjk.tar.zst",
 }
 
+import pf.OsStr
 import pf.Stdin
 import pf.Stdout
-import pf.Utc
-import aoc.AoC {
-    stdin: Stdin.readToEnd,
-    stdout: Stdout.write,
-    time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
+import parser.Parser exposing [Parser]
+import parser.String
+
+History : List(I64)
+
+main! : List(OsStr) => Try({}, _)
+main! = |_| {
+	input = Str.from_utf8(Stdin.read_to_end!()?) ? |err| InvalidUtf8(err)
+	answer1 = part1(input) ? |err| SolverFailed(Str.inspect(err))
+	answer2 = part2(input) ? |err| SolverFailed(Str.inspect(err))
+	Stdout.line!("Part 1: ${answer1}")?
+	Stdout.line!("Part 2: ${answer2}")?
+	Ok({})
 }
-import parser.String exposing [digits, parseStr, codeunit]
-import parser.Parser exposing [Parser, oneOf, sepBy, const, keep, skip]
 
-main =
-    AoC.solve {
-        year: 2023,
-        day: 9,
-        title: "Mirage Maintenance",
-        part1,
-        part2,
-    }
+part1 : Str -> Try(Str, _)
+part1 = |input| {
+	histories = String.parse_str(parse_history.sep_by(String.codeunit('\n')), input.trim())?
+	total = histories.map(|history| predict(Last, history)).sum()
+	Ok("The sum of the LAST extrapolated values ${total.to_str()}")
+}
 
-part1 : Str -> Result Str _
-part1 = \input ->
+## Part one extrapolates the next value of every history.
+expect part1(example_input) == Ok("The sum of the LAST extrapolated values 114")
 
-    histories = parseStr? (sepBy historyParser (codeunit '\n')) input
+part2 : Str -> Try(Str, _)
+part2 = |input| {
+	histories = String.parse_str(parse_history.sep_by(String.codeunit('\n')), input.trim())?
+	total = histories.map(|history| predict(First, history)).sum()
+	Ok("The sum of the FIRST extrapolated values ${total.to_str()}")
+}
 
-    nextValues = histories |> List.map (predict Last)
+## Part two extrapolates the preceding value of every history.
+expect part2(example_input) == Ok("The sum of the FIRST extrapolated values 2")
 
-    sum = nextValues |> List.sum
+parse_number : Parser(String.Utf8, I64)
+parse_number = String.one_of([
+	String.digits.map(U64.to_i64_wrap),
+	Parser.const(|number| -number.to_i64_wrap()).skip(String.codeunit('-')).keep(String.digits),
+])
 
-    Ok "The the sum of the LAST extrapolated values $(Num.toStr sum)"
+parse_history : Parser(String.Utf8, History)
+parse_history = parse_number.sep_by(String.codeunit(' '))
 
-expect
-    res = part1 exampleInput
-    res == Ok "The the sum of the LAST extrapolated values 114"
+## History parsing supports positive and negative numbers.
+expect String.parse_str(parse_history, "0 3 6 9 12 -15") == Ok([0, 3, 6, 9, 12, -15])
 
-part2 : Str -> Result Str _
-part2 = \input ->
+predict : [First, Last], History -> I64
+predict = |direction, history| {
+	if history.all(|number| number == 0) {
+		0
+	} else {
+		next_history = differences(history)
+		match direction {
+			First => first_or_crash(history) - predict(direction, next_history)
+			Last => last_or_crash(history) + predict(direction, next_history)
+		}
+	}
+}
 
-    histories = parseStr? (sepBy historyParser (codeunit '\n')) input
+first_or_crash : History -> I64
+first_or_crash = |history| match history.first() {
+	Ok(value) => value
+	Err(_) => {
+		crash "expected a non-empty history"
+	}
+}
 
-    nextValues = histories |> List.map (predict First)
+last_or_crash : History -> I64
+last_or_crash = |history| match history.last() {
+	Ok(value) => value
+	Err(_) => {
+		crash "expected a non-empty history"
+	}
+}
 
-    sum = nextValues |> List.sum
+## Prediction extends an arithmetic history at the end.
+expect predict(Last, [0, 3, 6, 9, 12, 15]) == 18
 
-    Ok "The the sum of the FIRST extrapolated values $(Num.toStr sum)"
+## Prediction extends a history at the beginning.
+expect predict(First, [10, 13, 16, 21, 30, 45]) == 5
 
-expect part2 exampleInput == Ok "The the sum of the FIRST extrapolated values 2"
+differences : History -> History
+differences = |history| match history {
+	[first, .. as rest] => differences_help(rest, first, [])
+	[] => []
+}
 
-exampleInput =
-    """
-    0 3 6 9 12 15
-    1 3 6 10 15 21
-    10 13 16 21 30 45
-    """
+differences_help : History, I64, History -> History
+differences_help = |remaining, previous, result| match remaining {
+	[] => result
+	[current, .. as rest] => differences_help(rest, current, result.append(current - previous))
+}
 
-History : List I64
+## Differences subtract each value from its successor.
+expect differences([1, 3, 6, 10, 15, 21]) == [2, 3, 4, 5, 6]
 
-numberParser : Parser (List U8) I64
-numberParser =
-    const
-        (\number ->
-            when number is
-                Positive nat -> Num.toI64 nat
-                Negative nat -> -1 * (Num.toI64 nat)
-        )
-    |> keep
-        (
-            oneOf [
-                const Positive |> keep digits,
-                const Negative |> skip (codeunit '-') |> keep digits,
-            ]
-        )
-
-historyParser : Parser (List U8) History
-historyParser = numberParser |> sepBy (codeunit ' ')
-
-expect parseStr historyParser "0 3 6 9 12 -15" == Ok [0, 3, 6, 9, 12, -15]
-
-predict : [First, Last] -> (History -> I64)
-predict = \direction -> \currHistory ->
-        if List.sum currHistory == 0 then
-            0 # base case
-        else
-            nextHistory = calcNewHistory currHistory Start []
-
-            when direction is
-                First ->
-                    curr = List.first currHistory |> unwrap "expected a non-empty list"
-
-                    curr - ((predict direction) nextHistory)
-
-                Last ->
-                    curr = List.last currHistory |> unwrap "expected a non-empty list"
-
-                    curr + ((predict direction) nextHistory)
-
-expect (predict Last) [0, 3, 6, 9, 12, 15] == 18
-expect (predict Last) [1, 3, 6, 10, 15, 21] == 28
-expect (predict Last) [10, 13, 16, 21, 30, 45] == 68
-expect (predict First) [10, 13, 16, 21, 30, 45] == 5
-
-calcNewHistory : List I64, [Start, Prev I64], List I64 -> List I64
-calcNewHistory = \old, maybePrev, new ->
-    next = List.dropFirst old 1
-    when (old, maybePrev) is
-        ([curr, ..], Start) ->
-            calcNewHistory
-                next
-                (Prev curr)
-                (List.withCapacity (List.len next))
-
-        ([curr, ..], Prev prev) ->
-            calcNewHistory
-                next
-                (Prev curr)
-                (List.append new (curr - prev))
-
-        (_, _) -> new # base case
-
-expect calcNewHistory [0, 3, 6, 9, 12, 15] Start [] == [3, 3, 3, 3, 3]
-expect calcNewHistory [3, 3, 3, 3, 3] Start [] == [0, 0, 0, 0]
-expect calcNewHistory [1, 3, 6, 10, 15, 21] Start [] == [2, 3, 4, 5, 6]
-expect calcNewHistory [2, 3, 4, 5, 6] Start [] == [1, 1, 1, 1]
-
-unwrap = \thing, msg ->
-    when thing is
-        Ok unwrapped -> unwrapped
-        Err _ -> crash msg
+example_input = 
+	\\0 3 6 9 12 15
+	\\1 3 6 10 15 21
+	\\10 13 16 21 30 45

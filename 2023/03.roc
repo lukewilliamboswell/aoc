@@ -1,282 +1,108 @@
-app [main] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br",
-    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.2.0/tlS1ZkwSKSB87_3poSOXcwHyySe0WxWOWQbPmp7rxBw.tar.br",
-}
+app [main!] { pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.21.0-rc4/FvCh4vdqm3nBY6DWEfZ8RuGCVfjuMY43HA8KSNk9qVDn.tar.zst" }
 
+import pf.OsStr
 import pf.Stdin
 import pf.Stdout
-import pf.Utc
-import aoc.AoC {
-    stdin: Stdin.readToEnd,
-    stdout: Stdout.write,
-    time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
+
+Coord : { row : U64, col : U64 }
+
+PartNumber : { row : U64, first_col : U64, last_col : U64, value : U64 }
+
+main! : List(OsStr) => Try({}, _)
+main! = |_| {
+	input = Str.from_utf8(Stdin.read_to_end!()?) ? |err| InvalidUtf8(err)
+	Stdout.line!("Part 1: ${part1(input)}")?
+	Stdout.line!("Part 2: ${part2(input)}")?
+	Ok({})
 }
 
-main =
-    AoC.solve {
-        year: 2023,
-        day: 3,
-        title: "Gear Ratios",
-        part1,
-        part2,
-    }
+part1 : Str -> Str
+part1 = |input| {
+	rows = input.trim().split_on("\n").map(Str.to_utf8)
+	numbers = find_numbers(rows)
+	symbols = find_symbols(rows, AnySymbol)
+	numbers.keep_if(|number| symbols.any(|symbol| is_adjacent(number, symbol))).map(|number| number.value).sum().to_str()
+}
 
-exampleInput =
-    """
-    467..114..
-    ...*......
-    ..35..633.
-    ......#...
-    617*......
-    .....+.58.
-    ..592.....
-    ......755.
-    ...$.*....
-    .664.598..
-    """
+## Part one sums numbers adjacent to any symbol.
+expect part1(example_input) == "4361"
 
-Location : { row : U64, col : U64 }
-Token : [Digit U8, Dot,  Symbol [Asterisk, Slash, Equal, Ampersand, At, Plus, Hash, Minus, Dollar, Percent], Number U64]
-LocationToken : { loc : Location, token : Token}
-Schematic : Dict Location Token
+part2 : Str -> Str
+part2 = |input| {
+	rows = input.trim().split_on("\n").map(Str.to_utf8)
+	numbers = find_numbers(rows)
+	gears = find_symbols(rows, GearsOnly)
+	gears.map(
+		|gear| match numbers.keep_if(|number| is_adjacent(number, gear)) {
+			[first, second] => first.value * second.value
+			_ => 0
+		},
+	).sum().to_str()
+}
 
-part1 : Str -> Result Str [NotImplemented, Error Str]
-part1 = \input ->
+## Part two sums ratios for gears adjacent to exactly two numbers.
+expect part2(example_input) == "467835"
 
-    inputSchematic : Schematic
-    inputSchematic =
-        input
-        |> parseLocationTokens
-        |> filterDots
-        |> toSchematic
-        |> replaceDigitsWithNumbers
+is_digit : U8 -> Bool
+is_digit = |byte| byte >= '0' and byte <= '9'
 
-    sum =
-        inputSchematic
-        |> symbolLocations
-        |> List.map (adjacentLocations inputSchematic)
-        |> List.map filterUniqueNumbers
-        |> List.map sumPartNumbers # assume each number can only see 1 symbol, otherwise we will double count
-        |> List.sum
+find_numbers : List(List(U8)) -> List(PartNumber)
+find_numbers = |rows|
+	flatten(rows.map_with_index(|row, row_index| find_numbers_in_row(row, row_index, 0, [])))
 
-    Ok "The sum of all of the part numbers in the engine schematic is $(Num.toStr sum)"
+find_numbers_in_row : List(U8), U64, U64, List(PartNumber) -> List(PartNumber)
+find_numbers_in_row = |remaining, row, col, result| match remaining {
+	[] => result
+	[first, ..] if is_digit(first) => {
+		parsed = consume_digits(remaining, col, 0)
+		number = { row, first_col: col, last_col: parsed.next_col - 1, value: parsed.value }
+		find_numbers_in_row(parsed.remaining, row, parsed.next_col, result.append(number))
+	}
+	[_, .. as rest] => find_numbers_in_row(rest, row, col + 1, result)
+}
 
-expect part1 exampleInput == Ok "The sum of all of the part numbers in the engine schematic is 4361"
+consume_digits : List(U8), U64, U64 -> { remaining : List(U8), next_col : U64, value : U64 }
+consume_digits = |remaining, col, value| match remaining {
+	[first, .. as rest] if is_digit(first) => consume_digits(rest, col + 1, value * 10 + (first - '0').to_u64())
+	_ => { remaining, next_col: col, value }
+}
 
-part2 : Str -> Result Str [NotImplemented, Error Str]
-part2 = \input ->
+find_symbols : List(List(U8)), [AnySymbol, GearsOnly] -> List(Coord)
+find_symbols = |rows, mode|
+	flatten(
+		rows.map_with_index(
+			|row, row_index|
+				row.map_with_index(|byte, col_index| { byte, coord: { row: row_index, col: col_index } })
+					.keep_if(
+						|item| match mode {
+							AnySymbol => item.byte != '.' and !is_digit(item.byte)
+							GearsOnly => item.byte == '*'
+						},
+					)
+					.map(|item| item.coord),
+		),
+	)
 
-    inputSchematic : Schematic
-    inputSchematic =
-        input
-        |> parseLocationTokens
-        |> filterDots
-        |> toSchematic
-        |> replaceDigitsWithNumbers
+flatten : List(List(a)) -> List(a)
+flatten = |lists| lists.fold([], List.concat)
 
-    sum =
-        inputSchematic
-        |> gearLocations
-        |> List.map (adjacentLocations inputSchematic)
-        |> List.map filterUniqueNumbers
-        |> List.keepIf \lts -> hasExactlyTwoParts lts []
-        |> List.map calculateGearRatio
-        |> List.sum
+is_adjacent : PartNumber, Coord -> Bool
+is_adjacent = |number, coord|
+	number.row.abs_diff(coord.row) <= 1
+		and coord.col + 1 >= number.first_col
+			and coord.col <= number.last_col + 1
 
-    Ok "The the sum of all of the gear ratios in the engine schematic is $(Num.toStr sum)"
+## A number is adjacent to symbols touching any digit, including diagonally.
+expect is_adjacent({ row: 2, first_col: 2, last_col: 3, value: 35 }, { row: 1, col: 3 })
 
-expect part2 exampleInput == Ok "The the sum of all of the gear ratios in the engine schematic is 467835"
-
-parseLocationTokens : Str -> List (List LocationToken)
-parseLocationTokens = \input ->
-    input |> Str.splitOn "\n" |> List.mapWithIndex \rowStr, row ->
-        rowStr |> Str.toUtf8 |> List.mapWithIndex \byte, col ->
-            {loc : {row, col}, token: tokenFromByte byte }
-
-tokenFromByte : U8 -> Token
-tokenFromByte = \b ->
-    when b is
-        a if a >= '0' && a <= '9' -> Digit (a - '0')
-        '*' -> Symbol Asterisk
-        '/' -> Symbol Slash
-        '=' -> Symbol Equal
-        '&' -> Symbol Ampersand
-        '@' -> Symbol At
-        '#' -> Symbol Hash
-        '+' -> Symbol Plus
-        '-' -> Symbol Minus
-        '$' -> Symbol Dollar
-        '%' -> Symbol Percent
-        '.' -> Dot
-        _ ->
-            str = [b] |> Str.fromUtf8 |> Result.withDefault ""
-            crash "token '$(str)' not recognised "
-
-expect tokenFromByte '.' == Dot
-expect tokenFromByte '2' == Digit 2u8
-expect tokenFromByte '$' == Symbol Dollar
-
-isDot : {token : Token}a -> Bool
-isDot = \{token} -> token != Dot
-
-expect !(isDot {loc: {row: 0, col: 0}, token: Dot})
-expect isDot {loc: {row: 0, col: 0}, token: Digit 0}
-
-filterDots : List (List LocationToken) -> List LocationToken
-filterDots = \lts ->
-    lts |> List.join |> List.keepIf isDot
-
-toSchematic : List LocationToken -> Schematic
-toSchematic = \lts ->
-    List.walk lts (Dict.empty {}) \dict, lt ->
-        Dict.insert dict lt.loc lt.token
-
-symbolLocations : Schematic -> List Location
-symbolLocations = \schematic ->
-    Dict.walk schematic [] \acc, loc, token ->
-        when token is
-            Symbol _ -> List.append acc loc
-            _ -> acc
-
-# increasing row is down
-# increasing col is right
-move : Location -> ([UpLeft, UpRight, DownLeft, DownRight, Left, Up, Right, Down] -> Result Location [Invalid])
-move = \{row, col} ->
-    \direction ->
-        maybeRow =
-            when direction is
-                UpLeft -> Num.subChecked row 1
-                UpRight -> Num.subChecked row 1
-                DownLeft -> Num.addChecked row 1
-                DownRight -> Num.addChecked row 1
-                Left -> Ok row
-                Up -> Num.subChecked row 1
-                Right -> Ok row
-                Down -> Num.addChecked row 1
-
-        maybeCol =
-            when direction is
-                UpLeft -> Num.subChecked col 1
-                UpRight -> Num.addChecked col 1
-                DownLeft -> Num.subChecked col 1
-                DownRight -> Num.addChecked col 1
-                Left -> Num.subChecked col 1
-                Up -> Ok col
-                Right -> Num.addChecked col 1
-                Down -> Ok col
-
-        when (maybeRow, maybeCol) is
-            (Ok r, Ok c) -> Ok {row: r, col: c}
-            _ -> Err Invalid
-
-getToken : Schematic -> (Location -> Result LocationToken [NothingAtLocation])
-getToken = \schematic -> \loc ->
-    when Dict.get schematic loc is
-        Ok token -> Ok {loc, token}
-        Err KeyNotFound -> Err NothingAtLocation
-
-adjacentLocations : Schematic -> (Location -> List LocationToken)
-adjacentLocations = \schematic -> \curr ->
-    [UpLeft,UpRight,DownLeft,DownRight,Left,Up,Right,Down]
-    |> List.keepOks (move curr)
-    |> List.keepOks (getToken schematic)
-
-# take a schematic and convert any digits into the number at that location
-replaceDigitsWithNumbers : Schematic -> Schematic
-replaceDigitsWithNumbers = \schematic ->
-    Dict.map schematic \loc, token ->
-        when token is
-            Digit _ -> Number (getNumberAtLocation schematic loc WalkingLeft)
-            _ -> token
-
-# start with a digit, walk left to first digit, then walk right building up the number
-getNumberAtLocation : Schematic, Location, [WalkingLeft, BuildingNumber U64] -> U64
-getNumberAtLocation = \schematic, loc, state ->
-
-    maybeRight =
-        (move loc) Right
-        |> Result.try \right ->
-            when Dict.get schematic right is
-                Ok (Digit u8) -> Ok (right, u8)
-                _ -> Err Invalid
-
-    maybeLeft =
-        (move loc) Left
-        |> Result.try \left ->
-            when Dict.get schematic left is
-                Ok (Digit u8) -> Ok (left, u8)
-                _ -> Err Invalid
-
-    maybeCurrent =
-        when Dict.get schematic loc is
-            Ok (Digit u8) -> Ok (loc, u8)
-            _ -> Err Invalid
-
-    when (state,             maybeLeft,    maybeRight,     maybeCurrent ) is
-        (WalkingLeft,        Ok (left, _), _,              Ok _         ) -> getNumberAtLocation schematic left WalkingLeft
-        (WalkingLeft,        _,            _,              Err _        ) -> crash "starting location isn't a digit or isn't in schematic"
-        (WalkingLeft,        _,            Ok (right, _),  Ok (_, u8)   ) -> getNumberAtLocation schematic right (BuildingNumber (Num.toU64 u8))
-        (WalkingLeft,        _,            _,              Ok (_, u8)   ) -> Num.toU64 u8 # single number
-        (WalkingLeft,        _,            _,              _            ) -> crash "unable to move right"
-        (BuildingNumber u64, _,            Ok (right, _),  Ok (_, u8)   ) -> getNumberAtLocation schematic right (BuildingNumber ((u64 * 10) + (Num.toU64 u8)))
-        (BuildingNumber u64, _,            _,              Ok (_, u8)   ) -> (u64 * 10) + (Num.toU64 u8) # base case
-        (BuildingNumber _,   _,            _,              _            ) -> crash "moved to a location that isnt a number"
-
-# take a list of location/tolen pairs and keep only unique numbers
-filterUniqueNumbers : List LocationToken -> List LocationToken
-filterUniqueNumbers = \lts ->
-    filterUniqueNumbersHelp lts [] []
-
-filterUniqueNumbersHelp : List LocationToken, List U64, List LocationToken -> List LocationToken
-filterUniqueNumbersHelp = \lts, seen, keep ->
-    next = List.dropFirst lts 1
-    when lts is
-        [] -> keep # base case, keep these locations
-        [first, ..] ->
-            when first.token is
-                Number u64 if !(List.contains seen u64) -> # we haven't seen this number before
-                    filterUniqueNumbersHelp
-                        next
-                        (List.append seen u64)
-                        (List.append keep first)
-                _ -> filterUniqueNumbersHelp next seen keep # ignore anything that is not a number
-
-sumPartNumbers : List LocationToken -> U64
-sumPartNumbers = \lts ->
-    next = List.dropFirst lts 1
-    when lts is
-        [] -> 0 # base case
-        [first, ..] ->
-            when first.token is
-                Number u64 -> u64 + (sumPartNumbers next) # next
-                _ -> crash "expected only numbers"
-
-gearLocations : Schematic -> List Location
-gearLocations = \schematic ->
-    Dict.walk schematic [] \acc, loc, token  ->
-        when token is
-            Symbol Asterisk -> List.append acc loc
-            _ -> acc
-
-hasExactlyTwoParts : List LocationToken, List U64 -> Bool
-hasExactlyTwoParts = \lts, seen ->
-    next = List.dropFirst lts 1
-    when lts is
-        [] -> List.len seen == 2
-        [first, .. ] ->
-            when first.token is
-                Number u64 -> hasExactlyTwoParts next (List.append seen u64)
-                _ -> crash "expect only numbers"
-
-calculateGearRatio : List LocationToken -> U64
-calculateGearRatio = \lts ->
-
-    expect List.len lts <= 2
-
-    next = List.dropFirst lts 1
-    when lts is
-        [] -> 1 # base case
-        [first, ..] ->
-            when first.token is
-                Number u64 -> u64 * (calculateGearRatio next) # next
-                _ -> crash "expected only numbers"
+example_input = 
+	\\467..114..
+	\\...*......
+	\\..35..633.
+	\\......#...
+	\\617*......
+	\\.....+.58.
+	\\..592.....
+	\\......755.
+	\\...$.*....
+	\\.664.598..

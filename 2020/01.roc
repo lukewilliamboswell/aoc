@@ -1,89 +1,83 @@
-app [main] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br",
-    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.2.0/tlS1ZkwSKSB87_3poSOXcwHyySe0WxWOWQbPmp7rxBw.tar.br",
+app [main!] {
+	pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.21.0-rc4/FvCh4vdqm3nBY6DWEfZ8RuGCVfjuMY43HA8KSNk9qVDn.tar.zst",
+	parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/1.0.2/FrnJ4RGDKpQyoDyESNoBwFNviY4ZGbMVLnUjW9tvSRjk.tar.zst",
 }
 
+import pf.OsStr
 import pf.Stdin
 import pf.Stdout
-import pf.Utc
-import aoc.AoC {
-    stdin: Stdin.readToEnd,
-    stdout: Stdout.write,
-    time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
+import parser.String
+
+main! : List(OsStr) => Try({}, _)
+main! = |_args| {
+	bytes = Stdin.read_to_end!()?
+	input = Str.from_utf8(bytes) ? |err| InvalidUtf8(err)
+	answer1 = part1(input) ? |err| SolverFailed(Str.inspect(err))
+	answer2 = part2(input) ? |err| SolverFailed(Str.inspect(err))
+	Stdout.line!("Part 1: ${answer1}")?
+	Stdout.line!("Part 2: ${answer2}")?
+	Ok({})
 }
 
-main =
-    AoC.solve {
-        year: 2020,
-        day: 1,
-        title: "Report Repair",
-        part1,
-        part2,
-    }
+part1 : Str -> Try(Str, [SolveFailed(Str)])
+part1 = |input| {
+	numbers = parse(input) ? |err| SolveFailed(Str.inspect(err))
+	{ x, y } = find_pair(numbers) ? |err| SolveFailed(Str.inspect(err))
+	Ok("${x.to_str()} * ${y.to_str()} = ${(x * y).to_str()}")
+}
 
-part1 : Str -> Result Str Str
-part1 = \input ->
+part2 : Str -> Try(Str, [SolveFailed(Str)])
+part2 = |input| {
+	numbers = parse(input) ? |err| SolveFailed(Str.inspect(err))
+	{ x, y, z } = find_triple(numbers) ? |err| SolveFailed(Str.inspect(err))
+	Ok("${x.to_str()} * ${y.to_str()} * ${z.to_str()} = ${(x * y * z).to_str()}")
+}
 
-    numbers : List U128
-    numbers = parse input
+parse : Str -> Try(List(U64), _)
+parse = |input| String.parse_str(String.digits.sep_by(String.codeunit('\n')), input.trim())
 
-    combined : List { x : U128, y : U128, mul : U128 }
-    combined =
-        List.joinMap numbers \x ->
-            List.keepOks numbers \y ->
-                if (x + y) == 2020 then
-                    Ok { x, y, mul: x * y }
-                else
-                    Err NotValid
+find_pair : List(U64) -> Try({ x : U64, y : U64 }, [NoPair])
+find_pair = |numbers| Ok(find_pair_sum(numbers, 2020) ? |_| NoPair)
 
-    combined
-    |> List.first
-    |> Result.map \{ x, y, mul } -> "$(Num.toStr x) * $(Num.toStr y) = $(Num.toStr mul)"
-    |> Result.mapErr \_ -> "Expected at least one pair to have sum of 2020"
+find_pair_sum : List(U64), U64 -> Try({ x : U64, y : U64 }, [NotFound])
+find_pair_sum = |numbers, target| match numbers {
+	[] => Err(NotFound)
+	[x, .. as rest] if x <= target => match rest.find_first(|y| x + y == target) {
+		Ok(y) => Ok({ x, y })
+		Err(_) => find_pair_sum(rest, target)
+	}
+	[_, .. as rest] => find_pair_sum(rest, target)
+}
 
-part2 : Str -> Result Str Str
-part2 = \input ->
+find_triple : List(U64) -> Try({ x : U64, y : U64, z : U64 }, [NoTriple])
+find_triple = |numbers| Ok(find_triple_sum(numbers, 2020) ? |_| NoTriple)
 
-    numbers : List U128
-    numbers = parse input
+find_triple_sum : List(U64), U64 -> Try({ x : U64, y : U64, z : U64 }, [NotFound])
+find_triple_sum = |numbers, target| match numbers {
+	[] => Err(NotFound)
+	[x, .. as rest] if x <= target => match find_pair_sum(rest, target - x) {
+		Ok({ x: y, y: z }) => Ok({ x, y, z })
+		Err(_) => find_triple_sum(rest, target)
+	}
+	[_, .. as rest] => find_triple_sum(rest, target)
+}
 
-    combined : List { x : U128, y : U128, z : U128, mul : U128 }
-    combined =
-        List.joinMap numbers \x ->
-            List.joinMap numbers \y ->
-                List.keepOks numbers \z ->
-                    if (x + y + z) == 2020 then
-                        Ok { x, y, z, mul: x * y * z }
-                    else
-                        Err NotValid
+example = 
+	\\1721
+	\\979
+	\\366
+	\\299
+	\\675
+	\\1456
 
-    combined
-    |> List.first
-    |> Result.map \{ x, y, z, mul } -> "$(Num.toStr x) * $(Num.toStr y) * $(Num.toStr z) = $(Num.toStr mul)"
-    |> Result.mapErr \_ -> "Expected at least one triple to have sum of 2020"
+## The sample pair sums to 2020.
+expect part1(example) == Ok("1721 * 299 = 514579")
 
-parse : Str -> List U128
-parse = \input ->
-    input
-    |> Str.splitOn "\n"
-    |> List.keepOks Str.toU128
+## The sample triple sums to 2020.
+expect part2(example) == Ok("979 * 366 * 675 = 241861950")
 
-expect
-    result = part1 example
-    result == Ok "1721 * 299 = 514579"
+## Input lines parse as unsigned integers.
+expect parse(example)? == [1721, 979, 366, 299, 675, 1456]
 
-expect
-    result = part2 example
-    result == Ok "979 * 366 * 675 = 241861950"
-
-expect parse example == [1721, 979, 366, 299, 675, 1456]
-
-example =
-    """
-    1721
-    979
-    366
-    299
-    675
-    1456
-    """
+## Expense entries cannot be reused to form a pair.
+expect find_pair([1010]) == Err(NoPair)

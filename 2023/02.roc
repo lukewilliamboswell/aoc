@@ -1,146 +1,133 @@
-app [main] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br",
-    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.2.0/tlS1ZkwSKSB87_3poSOXcwHyySe0WxWOWQbPmp7rxBw.tar.br",
-    parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/0.9.0/w8YKp2YAgQt5REYk912HfKAHBjcXsrnvtjI0CBzoAT4.tar.br",
+app [main!] {
+	pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.21.0-rc4/FvCh4vdqm3nBY6DWEfZ8RuGCVfjuMY43HA8KSNk9qVDn.tar.zst",
+	parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/1.0.2/FrnJ4RGDKpQyoDyESNoBwFNviY4ZGbMVLnUjW9tvSRjk.tar.zst",
 }
 
+import pf.OsStr
 import pf.Stdin
 import pf.Stdout
-import pf.Utc
-import aoc.AoC {
-    stdin: Stdin.readToEnd,
-    stdout: Stdout.write,
-    time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
+import parser.Parser exposing [Parser]
+import parser.String
+
+Cube : [Red(U64), Green(U64), Blue(U64)]
+
+Game : { id : U64, reveals : List(List(Cube)) }
+
+CubeSet : { red : U64, green : U64, blue : U64 }
+
+main! : List(OsStr) => Try({}, _)
+main! = |_| {
+	input = Str.from_utf8(Stdin.read_to_end!()?) ? |err| InvalidUtf8(err)
+	answer1 = part1(input) ? |err| SolverFailed(Str.inspect(err))
+	answer2 = part2(input) ? |err| SolverFailed(Str.inspect(err))
+	Stdout.line!("Part 1: ${answer1}")?
+	Stdout.line!("Part 2: ${answer2}")?
+	Ok({})
 }
-import parser.String exposing [string, digits, parseStr, codeunit]
-import parser.Parser exposing [Parser, map, sepBy, const, keep, skip, oneOf]
 
-main =
-    AoC.solve {
-        year: 2023,
-        day: 2,
-        title: "Cube Conundrum",
-        part1,
-        part2,
-    }
+part1 : Str -> Try(Str, _)
+part1 = |input| {
+	games = String.parse_str(parse_game.sep_by(String.codeunit('\n')), input.trim())?
+	total = games.keep_if(is_valid_game).map(|game| game.id).sum()
+	Ok("The sum of the IDs is ${total.to_str()}")
+}
 
-part1 : Str -> Result Str _
-part1 = \input ->
+part2 : Str -> Try(Str, _)
+part2 = |input| {
+	games = String.parse_str(parse_game.sep_by(String.codeunit('\n')), input.trim())?
+	total = games.map(
+		|game| {
+			set = min_cube_set(game)
+			set.red * set.green * set.blue
+		},
+	).sum()
+	Ok("The sum of the power is ${total.to_str()}")
+}
 
-    games = parseStr? (sepBy parseGame (codeunit '\n')) input
+parse_cube : Parser(String.Utf8, Cube)
+parse_cube = String.one_of([
+	Parser.const(|count| Red(count)).keep(String.digits).skip(String.string(" red")),
+	Parser.const(|count| Green(count)).keep(String.digits).skip(String.string(" green")),
+	Parser.const(|count| Blue(count)).keep(String.digits).skip(String.string(" blue")),
+])
 
-    ids =
-        List.walkWithIndex games [] \validGames, game, idx ->
-            if isValidGame game then
-                List.append validGames (Num.toU32 idx + 1)
-            else
-                validGames
+## A cube parser reads its count and colour.
+expect String.parse_str(parse_cube, "64 green") == Ok(Green(64))
 
-    Ok "The sum of the IDs is $(ids |> List.sum |> Num.toStr)"
+parse_game : Parser(String.Utf8, Game)
+parse_game = {
+	id: Parser.const(|id| id).skip(String.string("Game ")).keep(String.digits).skip(String.string(": ")),
+	reveals: parse_cube.sep_by(String.string(", ")).sep_by(String.string("; ")),
+}.Parser
 
-part2 : Str -> Result Str _
-part2 = \input ->
+## A game parser groups cubes by reveal.
+expect String.parse_str(parse_game, "Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green")
+	== Ok({ id: 1, reveals: [[Blue(3), Red(4)], [Red(1), Green(2), Blue(6)], [Green(2)]] })
 
-    games = parseStr? (sepBy parseGame (codeunit '\n')) input
+is_valid_game : Game -> Bool
+is_valid_game = |game| game.reveals.all(|reveal| reveal.all(is_valid_cube))
 
-    totalPower =
-        List.walkWithIndex games 0 \sum, game, _ ->
+is_valid_cube : Cube -> Bool
+is_valid_cube = |cube| match cube {
+	Red(count) => count <= 12
+	Green(count) => count <= 13
+	Blue(count) => count <= 14
+}
 
-            { red, green, blue } = calcGameMinCubeSet game
+## A reveal within the bag limits is valid.
+expect is_valid_game({ id: 1, reveals: [[Blue(3), Red(4)], [Green(13)]] })
 
-            power = red * green * blue
+## A reveal over a bag limit is invalid.
+expect !is_valid_game({ id: 1, reveals: [[Blue(15)]] })
 
-            sum + power
+min_cube_set : Game -> CubeSet
+min_cube_set = |game|
+	game.reveals.fold(
+		{ red: 0, green: 0, blue: 0 },
+		|set, reveal| reveal.fold(set, update_cube_set),
+	)
 
-    Ok "The sum of the power is $(Num.toStr totalPower)"
+update_cube_set : CubeSet, Cube -> CubeSet
+update_cube_set = |set, cube| match cube {
+	Red(count) => {
+		..set,
+		red: if count > set.red {
+			count
+		} else {
+			set.red
+		},
+	}
+	Green(count) => {
+		..set,
+		green: if count > set.green {
+			count
+		} else {
+			set.green
+		},
+	}
+	Blue(count) => {
+		..set,
+		blue: if count > set.blue {
+			count
+		} else {
+			set.blue
+		},
+	}
+}
 
-parseNumberColor : Parser (List U8) [Red U32, Green U32, Blue U32]
-parseNumberColor =
-    const
-        (\number -> \color ->
-                when color is
-                    Red -> Red number
-                    Green -> Green number
-                    Blue -> Blue number
-        )
-    |> skip (codeunit ' ')
-    |> keep (digits |> map Num.toU32)
-    |> skip (codeunit ' ')
-    |> keep
-        (
-            oneOf [
-                string "red" |> map \_ -> Red,
-                string "green" |> map \_ -> Green,
-                string "blue" |> map \_ -> Blue,
-            ]
-        )
+## The minimum set takes the maximum count of each colour.
+expect min_cube_set({ id: 1, reveals: [[Blue(3), Red(4)], [Red(1), Green(2), Blue(6)]] })
+	== { red: 4, green: 2, blue: 6 }
 
-expect parseStr parseNumberColor " 64 green" == Ok (Green 64u32)
-expect parseStr parseNumberColor " 12 red" == Ok (Red 12u32)
-expect parseStr parseNumberColor " 546 blue" == Ok (Blue 546u32)
+example_input = 
+	\\Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green
+	\\Game 2: 1 blue, 2 green; 3 green, 4 blue, 1 red; 1 green, 1 blue
+	\\Game 3: 8 green, 6 blue, 20 red; 5 blue, 4 red, 13 green; 5 green, 1 red
+	\\Game 4: 1 green, 3 red, 6 blue; 3 green, 6 red; 3 green, 15 blue, 14 red
+	\\Game 5: 6 red, 1 blue, 3 green; 2 blue, 1 red, 2 green
 
-parseGame : Parser (List U8) (List (List [Red U32, Green U32, Blue U32]))
-parseGame =
-    const (\i -> i)
-    |> skip (string "Game ")
-    |> skip (digits)
-    |> skip (codeunit ':')
-    |> keep
-        (
-            parseNumberColor
-            |> sepBy (codeunit ',')
-            |> sepBy (codeunit ';')
-        )
+## Part one sums the IDs of possible games.
+expect part1(example_input) == Ok("The sum of the IDs is 8")
 
-expect
-    parseStr parseGame "Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green"
-    == Ok [
-        [Blue 3u32, Red 4u32],
-        [Red 1u32, Green 2u32, Blue 6u32],
-        [Green 2u32],
-    ]
-
-isValidGame : List (List [Red U32, Green U32, Blue U32]) -> Bool
-isValidGame = \subsets ->
-    when subsets is
-        [] -> Bool.true
-        [subset, ..] ->
-            if isValidSubset subset then
-                isValidGame (List.dropFirst subsets 1)
-            else
-                Bool.false
-
-expect isValidGame [[Blue 3u32, Red 4u32], [Red 1u32, Green 2u32, Blue 6u32], [Green 2u32]]
-expect !(isValidGame [[Blue 15u32]])
-
-isValidSubset : List [Red U32, Green U32, Blue U32] -> Bool
-isValidSubset = \subsubset ->
-    next = List.dropFirst subsubset 1
-    when subsubset is
-        [] -> Bool.true
-        [Red count, ..] if count > 12 -> Bool.false
-        [Green count, ..] if count > 13 -> Bool.false
-        [Blue count, ..] if count > 14 -> Bool.false
-        _ -> isValidSubset next
-
-expect isValidSubset [Red 1u32, Green 2u32, Blue 6u32]
-expect !(isValidSubset [Red 100u32, Green 2u32, Blue 6u32])
-
-calcGameMinCubeSet : List (List [Red U32, Green U32, Blue U32]) -> { red : U32, green : U32, blue : U32 }
-calcGameMinCubeSet = \subsets ->
-    List.walk subsets { red: 0, green: 0, blue: 0 } calcMinCubeSetHelp
-
-calcMinCubeSetHelp : { red : U32, green : U32, blue : U32 }, List [Red U32, Green U32, Blue U32] -> { red : U32, green : U32, blue : U32 }
-calcMinCubeSetHelp = \current, subsubsets ->
-    next = List.dropFirst subsubsets 1
-    when subsubsets is
-        [] -> current
-        [Red count, ..] if count > current.red -> calcMinCubeSetHelp { current & red: count } next
-        [Green count, ..] if count > current.green -> calcMinCubeSetHelp { current & green: count } next
-        [Blue count, ..] if count > current.blue -> calcMinCubeSetHelp { current & blue: count } next
-        _ -> calcMinCubeSetHelp current next
-
-expect
-    game = parseStr parseGame "Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green" |> Result.withDefault []
-    minCubes = calcGameMinCubeSet game
-    minCubes == { red: 4, green: 2, blue: 6 }
+## Part two sums the powers of minimum cube sets.
+expect part2(example_input) == Ok("The sum of the power is 2286")

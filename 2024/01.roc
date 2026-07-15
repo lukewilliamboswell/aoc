@@ -1,87 +1,81 @@
-app [main] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br",
-    parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/0.9.0/w8YKp2YAgQt5REYk912HfKAHBjcXsrnvtjI0CBzoAT4.tar.br",
-    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.2.0/tlS1ZkwSKSB87_3poSOXcwHyySe0WxWOWQbPmp7rxBw.tar.br",
+app [main!] {
+	pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.21.0-rc4/FvCh4vdqm3nBY6DWEfZ8RuGCVfjuMY43HA8KSNk9qVDn.tar.zst",
+	parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/1.0.2/FrnJ4RGDKpQyoDyESNoBwFNviY4ZGbMVLnUjW9tvSRjk.tar.zst",
 }
 
+import pf.OsStr
 import pf.Stdin
 import pf.Stdout
-import pf.Utc
-import parser.String exposing [digits, parseStr, string, codeunit]
-import parser.Parser exposing [Parser, sepBy]
-import aoc.AoC {
-    stdin: Stdin.readToEnd,
-    stdout: Stdout.write,
-    time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
+import parser.Parser exposing [Parser]
+import parser.String
+
+main! : List(OsStr) => Try({}, _)
+main! = |_| {
+	bytes = Stdin.read_to_end!()?
+	input = Str.from_utf8(bytes) ? |err| InvalidUtf8(err)
+	answer1 = part1(input) ? |err| SolverFailed(Str.inspect(err))
+	answer2 = part2(input) ? |err| SolverFailed(Str.inspect(err))
+	Stdout.line!("Part 1: ${answer1}")?
+	Stdout.line!("Part 2: ${answer2}")?
+	Ok({})
 }
 
-main = AoC.solve { year: 2024, day: 1, title: "Historian Hysteria", part1, part2 }
+part1 : Str -> Try(Str, _)
+part1 = |input| {
+	numbers = String.parse_str(parse_location_ids.sep_by(String.codeunit('\n')), input.trim())?
+	{ first, second } = split_and_sort(numbers)
+	distance = calc_distance(first, second, 0)
+	Ok("The total distance between the lists is ${distance.to_str()}.")
+}
 
-part1 = \input ->
+## Part 1 calculates the sample location distance.
+expect part1(example_input) == Ok("The total distance between the lists is 11.")
 
-    numbers = try parseStr (sepBy parseLocationIds (codeunit '\n')) (Str.trim input)
+part2 : Str -> Try(Str, _)
+part2 = |input| {
+	numbers = String.parse_str(parse_location_ids.sep_by(String.codeunit('\n')), input.trim())?
+	right_counts = numbers.fold(
+		Dict.empty(),
+		|counts, item| counts.insert(item.second, (counts.get(item.second) ?? 0) + 1),
+	)
+	similarity = numbers.fold(0, |total, item| total + item.first * (right_counts.get(item.first) ?? 0))
+	Ok("The similarity score is ${similarity.to_str()}.")
+}
 
-    sortedLists = splitAndSort numbers
+## Part 2 calculates the sample similarity score.
+expect part2(example_input) == Ok("The similarity score is 31.")
 
-    distance = calcDistance sortedLists 0
+example_input = 
+	\\3   4
+	\\4   3
+	\\2   5
+	\\1   3
+	\\3   9
+	\\3   3
 
-    Ok "The total distance between the lists is $(Num.toStr distance)."
+parse_location_ids : Parser(String.Utf8, { first : U64, second : U64 })
+parse_location_ids = {
+	first: String.digits.skip(String.string("   ")),
+	second: String.digits,
+}.Parser
 
-expect part1 exampleInput == Ok "The total distance between the lists is 11."
+## A location row parses both identifiers.
+expect String.parse_str(parse_location_ids, "3   4") == Ok({ first: 3, second: 4 })
 
-part2 = \input ->
+split_and_sort : List({ first : U64, second : U64 }) -> { first : List(U64), second : List(U64) }
+split_and_sort = |numbers| {
+	first = numbers.map(|item| item.first).sort_with(U64.compare)
+	second = numbers.map(|item| item.second).sort_with(U64.compare)
+	{ first, second }
+}
 
-    numbers = try parseStr (sepBy parseLocationIds (codeunit '\n')) (Str.trim input)
-
-    sortedLists = splitAndSort numbers
-
-    similarity = calcSimilarity sortedLists 0
-
-    Ok "The similarity score is $(Num.toStr similarity)."
-
-expect part2 exampleInput == Ok "The similarity score is 31."
-
-exampleInput =
-    """
-    3   4
-    4   3
-    2   5
-    1   3
-    3   9
-    3   3
-    """
-
-parseLocationIds : Parser (List U8) { first : U64, second : U64 }
-parseLocationIds =
-    { Parser.map2 <-
-        first: digits,
-        _: string "   ",
-        second: digits,
-    }
-
-expect parseStr parseLocationIds "3   4" == Ok { first: 3, second: 4 }
-
-splitAndSort : List { first : U64, second : U64 } -> (List U64, List U64)
-splitAndSort = \numbers ->
-    first = numbers |> List.map .first |> List.sortAsc
-    second = numbers |> List.map .second |> List.sortAsc
-
-    (first, second)
-
-calcDistance : (List U64, List U64), U64 -> U64
-calcDistance = \(first, second), score ->
-    when (first, second) is
-        ([], []) -> score
-        ([a, .. as restA], [b, .. as restB]) -> calcDistance (restA, restB) (score + (Num.absDiff a b))
-        _ -> crash "expected input lists to be the same length"
-
-calcSimilarity : (List U64, List U64), U64 -> U64
-calcSimilarity = \(first, second), score ->
-    when first is
-        [] -> score
-        [a, .. as restA] ->
-            count = second |> List.countIf \b -> a == b
-
-            increment = a * count
-
-            calcSimilarity (restA, second) (score + increment)
+calc_distance : List(U64), List(U64), U64 -> U64
+calc_distance = |first, second, score| {
+	match (first, second) {
+		([], []) => score
+		([a, .. as rest_a], [b, .. as rest_b]) => calc_distance(rest_a, rest_b, score + a.abs_diff(b))
+		_ => {
+			crash "expected input lists to be the same length"
+		}
+	}
+}

@@ -1,90 +1,95 @@
-app [main] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br",
-    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.2.0/tlS1ZkwSKSB87_3poSOXcwHyySe0WxWOWQbPmp7rxBw.tar.br",
+app [main!] {
+	pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.21.0-rc4/FvCh4vdqm3nBY6DWEfZ8RuGCVfjuMY43HA8KSNk9qVDn.tar.zst",
+	parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/1.0.2/FrnJ4RGDKpQyoDyESNoBwFNviY4ZGbMVLnUjW9tvSRjk.tar.zst",
 }
 
+import pf.OsStr
 import pf.Stdin
 import pf.Stdout
-import pf.Utc
-import aoc.AoC {
-    stdin: Stdin.readToEnd,
-    stdout: Stdout.write,
-    time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
+import parser.Parser exposing [Parser]
+import parser.String
+
+Movement : [Forward(U64), Up(U64), Down(U64)]
+
+Position : { horizontal : U64, depth : U64, aim : U64 }
+
+main! : List(OsStr) => Try({}, _)
+main! = |_args| {
+	bytes = Stdin.read_to_end!()?
+	input = Str.from_utf8(bytes) ? |err| InvalidUtf8(err)
+	answer1 = part1(input) ? |err| SolverFailed(Str.inspect(err))
+	answer2 = part2(input) ? |err| SolverFailed(Str.inspect(err))
+	Stdout.line!("Part 1: ${answer1}")?
+	Stdout.line!("Part 2: ${answer2}")?
+	Ok({})
 }
 
-main =
-    AoC.solve {
-        year: 2021,
-        day: 2,
-        title: "Dive!",
-        part1,
-        part2,
-    }
+part1 : Str -> Try(Str, _)
+part1 = |input| {
+	movements = parse_input(input)?
+	position = process_simple(movements)
+	Ok("Final position is h:${position.horizontal.to_str()},d:${position.depth.to_str()}, result:${(position.horizontal * position.depth).to_str()}")
+}
 
-part1 : Str -> Result Str Str
-part1 = \input ->
-    {h,d} =
-        input
-        |> parseInput
-        |> process
+part2 : Str -> Try(Str, _)
+part2 = |input| {
+	movements = parse_input(input)?
+	position = process_with_aim(movements)
+	Ok("Final position is h:${position.horizontal.to_str()},d:${position.depth.to_str()}, result:${(position.horizontal * position.depth).to_str()}")
+}
 
-    hs = h |> Num.toStr
-    ds = d |> Num.toStr
-    rs = (h * d) |> Num.toStr
+parse_input : Str -> Try(List(Movement), _)
+parse_input = |content|
+	String.parse_str(movement_parser.sep_by(String.codeunit('\n')), content.trim())
 
-    Ok "Final position is h:$(hs),d:$(ds), result:$(rs)"
+movement_parser : Parser(String.Utf8, Movement)
+movement_parser = Parser.one_of([
+	Parser.const(|amount| Forward(amount)).skip(String.string("forward ")).keep(String.digits),
+	Parser.const(|amount| Down(amount)).skip(String.string("down ")).keep(String.digits),
+	Parser.const(|amount| Up(amount)).skip(String.string("up ")).keep(String.digits),
+])
 
-part2 : Str -> Result Str Str
-part2 = \input ->
-    {h,d} =
-        input
-        |> parseInput
-        |> process
+process_simple : List(Movement) -> Position
+process_simple = |movements|
+	movements.fold(
+		{ horizontal: 0, depth: 0, aim: 0 },
+		|position, movement|
+			match movement {
+				Forward(amount) => { ..position, horizontal: position.horizontal + amount }
+				Up(amount) => { ..position, depth: position.depth - amount }
+				Down(amount) => { ..position, depth: position.depth + amount }
+			},
+	)
 
-    hs = h |> Num.toStr
-    ds = d |> Num.toStr
-    rs = (h * d) |> Num.toStr
+process_with_aim : List(Movement) -> Position
+process_with_aim = |movements|
+	movements.fold(
+		{ horizontal: 0, depth: 0, aim: 0 },
+		|position, movement|
+			match movement {
+				Forward(amount) => {
+					..position,
+					horizontal: position.horizontal + amount,
+					depth: position.depth + amount * position.aim,
+				}
+				Up(amount) => { ..position, aim: position.aim - amount }
+				Down(amount) => { ..position, aim: position.aim + amount }
+			},
+	)
 
-    Ok "Final position is h:$(hs),d:$(ds), result:$(rs)"
+example = 
+	\\forward 5
+	\\down 5
+	\\forward 8
+	\\up 3
+	\\down 8
+	\\forward 2
 
-maybeMove : Str, Str -> Result U64 [InvalidNumStr, NotFound]
-maybeMove = \line, direction ->
-    line
-    |> Str.replaceFirst direction ""
-    |> Str.trim
-    |> Str.toU64
+## Movement records parse from the strategy guide.
+expect parse_input(example)? == [Forward(5), Down(5), Forward(8), Up(3), Down(8), Forward(2)]
 
-expect Str.replaceFirst "forward 12" "forward" "" == " 12"
-expect maybeMove "forward 12" "forward" == Ok 12
+## Part one applies movement directly to horizontal position and depth.
+expect part1(example)? == "Final position is h:15,d:10, result:150"
 
-parseInput : Str -> List [Fd U64, Up U64, Dn U64]
-parseInput = \content ->
-    content
-    |> Str.splitOn "\n"
-    |> List.keepOks \line ->
-        maybeForward = maybeMove line "forward"
-        maybeDown = maybeMove line "down"
-        maybeUp = maybeMove line "up"
-
-        when Triple maybeForward maybeDown maybeUp is
-            Triple (Ok x) _ _ -> Ok (Fd x)
-            Triple _ (Ok x) _ -> Ok (Dn x)
-            Triple _ _ (Ok x) -> Ok (Up x)
-            Triple _ _ _ -> Err ""
-
-expect parseInput "" == []
-expect parseInput "forward 12" == [Fd 12]
-expect parseInput "forward 5\ndown 5\nforward 8\nup 3\ndown 8\nforward 2" == [Fd 5, Dn 5, Fd 8, Up 3, Dn 8, Fd 2]
-
-process : List [Fd U64, Up U64, Dn U64] -> { h : U64, d : U64, a : U64 }
-process = \movements ->
-    movements
-    |> List.walk
-        { h: 0, d: 0, a: 0 }
-        \state, current ->
-            when current is
-                Fd x -> { state & h: state.h + x, d: state.d + (x * state.a) }
-                Up x -> { state & a: state.a - x }
-                Dn x -> { state & a: state.a + x }
-
-expect process [Fd 5, Dn 5, Fd 8, Up 3, Dn 8, Fd 2] == { h: 15, d: 60, a: 10 }
+## Part two applies forward movement using the current aim.
+expect part2(example)? == "Final position is h:15,d:60, result:900"

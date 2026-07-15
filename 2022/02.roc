@@ -1,138 +1,113 @@
-app [main] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br",
-    parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/0.9.0/w8YKp2YAgQt5REYk912HfKAHBjcXsrnvtjI0CBzoAT4.tar.br",
-    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.2.0/tlS1ZkwSKSB87_3poSOXcwHyySe0WxWOWQbPmp7rxBw.tar.br",
-}
+app [main!] { pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.21.0-rc4/FvCh4vdqm3nBY6DWEfZ8RuGCVfjuMY43HA8KSNk9qVDn.tar.zst" }
 
-import parser.String exposing [codeunit]
-import parser.Parser exposing [Parser, const, keep, skip, oneOf]
+import pf.OsStr
 import pf.Stdin
 import pf.Stdout
-import pf.Utc
-import aoc.AoC {
-    stdin: Stdin.readToEnd,
-    stdout: Stdout.write,
-    time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
+
+Shape : [Rock, Paper, Scissors]
+
+Outcome : [Loss, Draw, Win]
+
+Round : { opponent : Shape, guide : Outcome }
+
+Choice : { opponent : Shape, choice : Shape }
+
+main! : List(OsStr) => Try({}, _)
+main! = |_args| {
+	bytes = Stdin.read_to_end!()?
+	input = Str.from_utf8(bytes) ? |err| InvalidUtf8(err)
+	answer1 = part1(input) ? |err| SolverFailed(Str.inspect(err))
+	answer2 = part2(input) ? |err| SolverFailed(Str.inspect(err))
+	Stdout.line!("Part 1: ${answer1}")?
+	Stdout.line!("Part 2: ${answer2}")?
+	Ok({})
 }
 
-main =
-    AoC.solve {
-        year: 2022,
-        day: 2,
-        title: "Rock Paper Scissors",
-        part1,
-        part2,
-    }
+part1 : Str -> Try(Str, [InvalidRound(Str)])
+part1 = |input| {
+	rounds = parse_input(input)?
+	total = rounds.map(determine_choice).map(calculate_score).sum()
+	Ok("The total score following guide ${total.to_str()}")
+}
 
-exampleInput =
-    """
-    A Y
-    B X
-    C Z
-    """
+part2 : Str -> Try(Str, [InvalidRound(Str)])
+part2 = |input| part1(input)
 
-part1 : Str -> Result Str _
-part1 = \input ->
-    input
-    |> Str.trim
-    |> \str -> String.parseStr (Parser.sepBy rockPaperScissorParser (codeunit '\n')) str
-    |> Result.mapErr \err -> ParseErr err
-    |> Result.map \rounds ->
-        total =
-            rounds
-            |> List.map \round ->
-                round
-                |> determineChoice
-                |> calculateScore
-            |> List.sum
+parse_input : Str -> Try(List(Round), [InvalidRound(Str)])
+parse_input = |input|
+	parse_lines(input.trim().split_on("\n"), [])
 
-        "The total score following guide $(Num.toStr total)"
+parse_lines : List(Str), List(Round) -> Try(List(Round), [InvalidRound(Str)])
+parse_lines = |lines, rounds|
+	match lines {
+		[] => Ok(rounds)
+		[first, .. as rest] => parse_lines(rest, rounds.append(parse_round(first)?))
+	}
 
-expect
-    result = part1 exampleInput
-    result == Ok "The total score following guide 12"
+parse_round : Str -> Try(Round, [InvalidRound(Str)])
+parse_round = |line| {
+	if line == "A X" Ok({ opponent: Rock, guide: Loss })
+	else if line == "A Y" Ok({ opponent: Rock, guide: Draw })
+	else if line == "A Z" Ok({ opponent: Rock, guide: Win })
+	else if line == "B X" Ok({ opponent: Paper, guide: Loss })
+	else if line == "B Y" Ok({ opponent: Paper, guide: Draw })
+	else if line == "B Z" Ok({ opponent: Paper, guide: Win })
+	else if line == "C X" Ok({ opponent: Scissors, guide: Loss })
+	else if line == "C Y" Ok({ opponent: Scissors, guide: Draw })
+	else if line == "C Z" Ok({ opponent: Scissors, guide: Win })
+	else Err(InvalidRound(line))
+}
 
-part2 : Str -> Result Str [NotImplemented, Error Str]
-part2 = \input ->
+calculate_score : Choice -> U64
+calculate_score = |choice| {
+	base = match choice.choice {
+		Rock => 1
+		Paper => 2
+		Scissors => 3
+	}
+	outcome = match determine_outcome(choice) {
+		Loss => 0
+		Draw => 3
+		Win => 6
+	}
+	base + outcome
+}
 
-    input
-    |> Str.trim
-    |> \str -> String.parseStr (Parser.sepBy rockPaperScissorParser (codeunit '\n')) str
-    |> Result.mapErr \_ -> Error "failed to parse input"
-    |> Result.map \rounds  ->
+determine_outcome : Choice -> Outcome
+determine_outcome = |{ opponent, choice }|
+	match (opponent, choice) {
+		(Rock, Rock) => Draw
+		(Rock, Paper) => Win
+		(Rock, Scissors) => Loss
+		(Paper, Rock) => Loss
+		(Paper, Paper) => Draw
+		(Paper, Scissors) => Win
+		(Scissors, Rock) => Win
+		(Scissors, Paper) => Loss
+		(Scissors, Scissors) => Draw
+	}
 
-        total =
-            rounds
-            |> List.map \round ->
-                round
-                |> determineChoice
-                |> calculateScore
-            |> List.sum
+determine_choice : Round -> Choice
+determine_choice = |{ opponent, guide }| {
+	rock = { opponent, choice: Rock }
+	paper = { opponent, choice: Paper }
+	if determine_outcome(rock) == guide rock else if determine_outcome(paper) == guide paper else { opponent, choice: Scissors }
+}
 
-        "The total score following guide $(Num.toStr total)"
+example_input = 
+	\\A Y
+	\\B X
+	\\C Z
 
-expect part2 exampleInput == Ok "The total score following guide 12"
+## The guide parses into opponent shapes and desired outcomes.
+expect parse_input(example_input)? == [
+	{ opponent: Rock, guide: Draw },
+	{ opponent: Paper, guide: Loss },
+	{ opponent: Scissors, guide: Win },
+]
 
-RockScissorPaper : [Rock, Scissor, Paper]
-LossDrawWin : [Loss, Draw, Win]
-OpponentGuide : { opponent : RockScissorPaper, guide : LossDrawWin }
-OpponentChoice : { opponent : RockScissorPaper, choice : RockScissorPaper }
+## Following the sample guide produces a score of twelve.
+expect part1(example_input) == Ok("The total score following guide 12")
 
-calculateScore : OpponentChoice -> U64
-calculateScore = \oc ->
-    baseScore =
-        when oc.choice is
-            Rock -> 1
-            Paper -> 2
-            Scissor -> 3
-
-    winLossDrawScore =
-        when determineOutcome oc is
-            Loss -> 0
-            Draw -> 3
-            Win -> 6
-
-    baseScore + winLossDrawScore
-
-determineOutcome : OpponentChoice -> LossDrawWin
-determineOutcome = \oc ->
-    when (oc.opponent, oc.choice) is
-        (Rock, Rock) -> Draw
-        (Rock, Paper) -> Win
-        (Rock, Scissor) -> Loss
-        (Paper, Rock) -> Loss
-        (Paper, Paper) -> Draw
-        (Paper, Scissor) -> Win
-        (Scissor, Rock) -> Win
-        (Scissor, Paper) -> Loss
-        (Scissor, Scissor) -> Draw
-
-determineChoice : OpponentGuide -> OpponentChoice
-determineChoice = \{ opponent, guide } ->
-    if determineOutcome { opponent, choice: Rock } == guide then
-        { opponent, choice: Rock }
-    else if determineOutcome { opponent, choice: Paper } == guide then
-        { opponent, choice: Paper }
-    else
-        { opponent, choice: Scissor }
-
-rockPaperScissorParser : Parser (List U8) OpponentGuide
-rockPaperScissorParser =
-    const (\opponent -> \guide -> { opponent, guide })
-    |> keep
-        (
-            oneOf [
-                const Rock |> skip (codeunit 'A'),
-                const Paper |> skip (codeunit 'B'),
-                const Scissor |> skip (codeunit 'C'),
-            ]
-        )
-    |> skip (codeunit ' ')
-    |> keep
-        (
-            oneOf [
-                const Loss |> skip (codeunit 'X'),
-                const Draw |> skip (codeunit 'Y'),
-                const Win |> skip (codeunit 'Z'),
-            ]
-        )
+## A chosen shape is scored using its shape and outcome values.
+expect calculate_score({ opponent: Rock, choice: Paper }) == 8

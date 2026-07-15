@@ -1,221 +1,222 @@
-app [main] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br",
-    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.2.0/tlS1ZkwSKSB87_3poSOXcwHyySe0WxWOWQbPmp7rxBw.tar.br",
-}
+app [main!] { pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.21.0-rc4/FvCh4vdqm3nBY6DWEfZ8RuGCVfjuMY43HA8KSNk9qVDn.tar.zst" }
 
+import pf.OsStr
 import pf.Stdin
 import pf.Stdout
-import pf.Utc
-import aoc.AoC {
-    stdin: Stdin.readToEnd,
-    stdout: Stdout.write,
-    time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
+
+Position : { r : I64, c : I64 }
+
+HeightMap : Dict(Position, U8)
+
+Direction : [Up, Down, Left, Right]
+
+main! : List(OsStr) => Try({}, _)
+main! = |_| {
+	input = Str.from_utf8(Stdin.read_to_end!()?) ? |err| InvalidUtf8(err)
+	Stdout.line!("Part 1: ${part1(input)}")?
+	Stdout.line!("Part 2: ${part2(input)}")?
+	Ok({})
 }
 
-main = AoC.solve { year: 2024, day: 10, title: "Hoof It", part1, part2 }
+part1 : Str -> Str
+part1 = |input| {
+	height_map = parse_map(input.trim())
+	trail_heads(height_map).map(|head| score_trail(head, height_map)).sum().to_str()
+}
 
-part1 : Str -> Result Str []
-part1 = \input ->
+part2 : Str -> Str
+part2 = |input| {
+	height_map = parse_map(input.trim())
+	trail_heads(height_map).map(|head| rate_trail(head, height_map)).sum().to_str()
+}
 
-    map = parse_map (Str.trim input)
+trail_heads : HeightMap -> List(Position)
+trail_heads = |height_map|
+	height_map.fold(
+		[],
+		|heads, position, height|
+			if height == '0' {
+				heads.append(position)
+			} else {
+				heads
+			},
+	)
 
-    trail_heads =
-        Dict.walk map [] \heads, pos, height ->
-            if height == '0' then
-                List.append heads pos
-            else
-                heads
+## The first sample has two reachable peaks.
+expect part1(example_map_1) == "2"
 
-    List.map trail_heads \head -> score_trail head map
-    |> List.sum
-    |> Num.toStr
-    |> Ok
+## The second sample has four reachable peaks.
+expect part1(example_map_2) == "4"
 
-expect part1 example_map_1 == Ok "2"
-expect part1 example_map_2 == Ok "4"
-expect part1 example_map_3 == Ok "3"
-expect part1 example_map_4 == Ok "36"
+## The third sample has three reachable peaks.
+expect part1(example_map_3) == "3"
 
-part2 : Str -> Result Str _
-part2 = \input ->
-    map = parse_map (Str.trim input)
+## The full sample has a score of 36.
+expect part1(example_map_4) == "36"
 
-    trail_heads =
-        Dict.walk map [] \heads, pos, height ->
-            if height == '0' then
-                List.append heads pos
-            else
-                heads
+## The rating sample contains three distinct trails.
+expect part2(example_map_5) == "3"
 
-    List.map trail_heads \head -> rate_trail head map
-    |> List.sum
-    |> Num.toStr
-    |> Ok
+rate_trail : Position, HeightMap -> U64
+rate_trail = |position, height_map| {
+	height = height_map.get(position) ?? '0'
+	if height == '9' {
+		1
+	} else {
+		next_steps(position, height, height_map).map(|next| rate_trail(next.position, height_map)).sum()
+	}
+}
 
-expect part2 example_map_5 == Ok "3"
+score_trail : Position, HeightMap -> U64
+score_trail = |position, height_map|
+	reachable_peaks(position, height_map).len()
 
-rate_trail : { r : U8, c : U8 }, Dict { r : U8, c : U8 } U8 -> U64
-rate_trail = \head_position, map ->
+reachable_peaks : Position, HeightMap -> Set(Position)
+reachable_peaks = |position, height_map| {
+	height = height_map.get(position) ?? '0'
+	if height == '9' {
+		Set.single(position)
+	} else {
+		next_steps(position, height, height_map).fold(
+			Set.empty(),
+			|peaks, next|
+				peaks.union(reachable_peaks(next.position, height_map)),
+		)
+	}
+}
 
-    help : ({ r : U8, c : U8 }, U8), Set { r : U8, c : U8 }, List { r : U8, c : U8 } -> List (List { r : U8, c : U8 })
-    help = \(position, height), visited, steps ->
-        if height == '9' then
-            [List.append steps position]
-        else if Set.contains visited position then
-            []
-        else
-            updated_visited = Set.insert visited position
+next_steps : Position, U8, HeightMap -> List({ position : Position, height : U8 })
+next_steps = |position, height, height_map|
+	[Up, Down, Left, Right].fold(
+		[],
+		|steps, direction|
+			match step(position, height, direction, height_map) {
+				Ok(next) => steps.append(next)
+				Err(_) => steps
+			},
+	)
 
-            [Up, Down, Left, Right]
-            |> List.keepOks \direction -> step (position, height) direction map
-            |> List.map \next -> help next updated_visited (List.append steps position)
-            |> List.join
+step : Position, U8, Direction, HeightMap -> Try({ position : Position, height : U8 }, [InvalidStep])
+step = |position, height, direction, height_map| {
+	next_position = match direction {
+		Up => { r: position.r - 1, c: position.c }
+		Down => { r: position.r + 1, c: position.c }
+		Left => { r: position.r, c: position.c - 1 }
+		Right => { r: position.r, c: position.c + 1 }
+	}
 
-    help (head_position, '0') (Set.empty {}) [] |> Set.fromList |> Set.len
+	match height_map.get(next_position) {
+		Ok(next_height) if next_height == height + 1 => Ok({ position: next_position, height: next_height })
+		_ => Err(InvalidStep)
+	}
+}
 
-score_trail : { r : U8, c : U8 }, Dict { r : U8, c : U8 } U8 -> U64
-score_trail = \head_position, map ->
+## A downhill neighbor is a valid step from zero to one.
+expect {
+	height_map = parse_map(example_map_1)
+	step({ c: 3, r: 0 }, '0', Down, height_map) == Ok({ position: { c: 3, r: 1 }, height: '1' })
+}
 
-    help : ({ r : U8, c : U8 }, U8), Set { r : U8, c : U8 } -> List { r : U8, c : U8 }
-    help = \(position, height), visited ->
-        if height == '9' then
-            [position]
-        else if Set.contains visited position then
-            []
-        else
-            updated_visited = Set.insert visited position
+## Moving back to a lower height is invalid.
+expect {
+	height_map = parse_map(example_map_1)
+	step({ c: 3, r: 1 }, '1', Up, height_map) == Err(InvalidStep)
+}
 
-            [Up, Down, Left, Right]
-            |> List.keepOks \direction -> step (position, height) direction map
-            |> List.map \next -> help next updated_visited
-            |> List.join
+## A left neighbor exactly one level higher is valid.
+expect {
+	height_map = parse_map(example_map_1)
+	step({ c: 3, r: 3 }, '3', Left, height_map) == Ok({ position: { c: 2, r: 3 }, height: '4' })
+}
 
-    help (head_position, '0') (Set.empty {}) |> Set.fromList |> Set.len
+## A right neighbor exactly one level higher is valid.
+expect {
+	height_map = parse_map(example_map_1)
+	step({ c: 3, r: 3 }, '3', Right, height_map) == Ok({ position: { c: 4, r: 3 }, height: '4' })
+}
 
-step : ({ r : U8, c : U8 }, U8), [Up, Down, Left, Right], Dict { r : U8, c : U8 } U8 -> Result ({ r : U8, c : U8 }, U8) _
-step = \(position, height), direction, map ->
+parse_map : Str -> HeightMap
+parse_map = |input|
+	input.split_on("\n").fold_with_index(
+		Dict.empty(),
+		|dict, row, r|
+			row.to_utf8().fold_with_index(
+				dict,
+				|inner, byte, c|
+					if byte == '.' {
+						inner
+					} else {
+						inner.insert({ r: r.to_i64_wrap(), c: c.to_i64_wrap() }, byte)
+					},
+			),
+	)
 
-    next_position =
-        when direction is
-            Up -> { r: Num.subWrap position.r 1, c: position.c }
-            Down -> { r: Num.addWrap position.r 1, c: position.c }
-            Left -> { r: position.r, c: Num.subWrap position.c 1 }
-            Right -> { r: position.r, c: Num.addWrap position.c 1 }
+## Map parsing records every numeric position and ignores dots.
+expect {
+	actual = parse_map(example_map_1)
+	expected = Dict.from_list([
+		({ c: 3, r: 0 }, '0'),
+		({ c: 3, r: 1 }, '1'),
+		({ c: 3, r: 2 }, '2'),
+		({ c: 0, r: 3 }, '6'),
+		({ c: 1, r: 3 }, '5'),
+		({ c: 2, r: 3 }, '4'),
+		({ c: 3, r: 3 }, '3'),
+		({ c: 4, r: 3 }, '4'),
+		({ c: 5, r: 3 }, '5'),
+		({ c: 6, r: 3 }, '6'),
+		({ c: 0, r: 4 }, '7'),
+		({ c: 6, r: 4 }, '7'),
+		({ c: 0, r: 5 }, '8'),
+		({ c: 6, r: 5 }, '8'),
+		({ c: 0, r: 6 }, '9'),
+		({ c: 6, r: 6 }, '9'),
+	])
+	actual == expected
+}
 
-    next_height = (Dict.get map next_position)?
+example_map_1 = 
+	\\...0...
+	\\...1...
+	\\...2...
+	\\6543456
+	\\7.....7
+	\\8.....8
+	\\9.....9
 
-    if (Num.subChecked next_height height) == Ok 1 then
-        Ok (next_position, next_height)
-    else
-        Err Invalid
+example_map_2 = 
+	\\..90..9
+	\\...1.98
+	\\...2..7
+	\\6543456
+	\\765.987
+	\\876....
+	\\987....
 
-expect
-    map = parse_map example_map_1
-    a = step ({ c: 3, r: 0 }, '0') Down map
-    a == Ok ({ c: 3, r: 1 }, '1')
+example_map_3 = 
+	\\10..9..
+	\\2...8..
+	\\3...7..
+	\\4567654
+	\\...8..3
+	\\...9..2
+	\\.....01
 
-expect
-    map = parse_map example_map_1
-    a = step ({ c: 3, r: 1 }, '1') Up map
-    a == Err Invalid
+example_map_4 = 
+	\\89010123
+	\\78121874
+	\\87430965
+	\\96549874
+	\\45678903
+	\\32019012
+	\\01329801
+	\\10456732
 
-expect
-    map = parse_map example_map_1
-    a = step ({ c: 3, r: 3 }, '3') Left map
-    a == Ok ({ c: 2, r: 3 }, '4')
-
-expect
-    map = parse_map example_map_1
-    a = step ({ c: 3, r: 3 }, '3') Right map
-    a == Ok ({ c: 4, r: 3 }, '4')
-
-parse_map : Str -> Dict { r : U8, c : U8 } U8
-parse_map = \input ->
-    input
-    |> Str.splitOn "\n"
-    |> List.walkWithIndex (Dict.empty {}) \dict, row, r ->
-        row
-        |> Str.toUtf8
-        |> List.walkWithIndex dict \inner_dict, b, c ->
-            if b != '.' then
-                Dict.insert inner_dict { r: Num.intCast r, c: Num.intCast c } b
-            else
-                inner_dict
-
-example_map_1 =
-    """
-    ...0...
-    ...1...
-    ...2...
-    6543456
-    7.....7
-    8.....8
-    9.....9
-    """
-
-expect
-    a = parse_map example_map_1
-    a
-    == Dict.fromList [
-        ({ c: 3, r: 0 }, '0'),
-        ({ c: 3, r: 1 }, '1'),
-        ({ c: 3, r: 2 }, '2'),
-        ({ c: 0, r: 3 }, '6'),
-        ({ c: 1, r: 3 }, '5'),
-        ({ c: 2, r: 3 }, '4'),
-        ({ c: 3, r: 3 }, '3'),
-        ({ c: 4, r: 3 }, '4'),
-        ({ c: 5, r: 3 }, '5'),
-        ({ c: 6, r: 3 }, '6'),
-        ({ c: 0, r: 4 }, '7'),
-        ({ c: 6, r: 4 }, '7'),
-        ({ c: 0, r: 5 }, '8'),
-        ({ c: 6, r: 5 }, '8'),
-        ({ c: 0, r: 6 }, '9'),
-        ({ c: 6, r: 6 }, '9'),
-    ]
-
-example_map_2 =
-    """
-    ..90..9
-    ...1.98
-    ...2..7
-    6543456
-    765.987
-    876....
-    987....
-    """
-
-example_map_3 =
-    """
-    10..9..
-    2...8..
-    3...7..
-    4567654
-    ...8..3
-    ...9..2
-    .....01
-    """
-
-example_map_4 =
-    """
-    89010123
-    78121874
-    87430965
-    96549874
-    45678903
-    32019012
-    01329801
-    10456732
-    """
-
-example_map_5 =
-    """
-    .....0.
-    ..4321.
-    ..5..2.
-    ..6543.
-    ..7..4.
-    ..8765.
-    ..9....
-    """
+example_map_5 = 
+	\\.....0.
+	\\..4321.
+	\\..5..2.
+	\\..6543.
+	\\..7..4.
+	\\..8765.
+	\\..9....

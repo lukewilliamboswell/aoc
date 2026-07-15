@@ -1,83 +1,67 @@
-app [main] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br",
-    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.2.0/tlS1ZkwSKSB87_3poSOXcwHyySe0WxWOWQbPmp7rxBw.tar.br",
+app [main!] {
+	pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.21.0-rc4/FvCh4vdqm3nBY6DWEfZ8RuGCVfjuMY43HA8KSNk9qVDn.tar.zst",
+	parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/1.0.2/FrnJ4RGDKpQyoDyESNoBwFNviY4ZGbMVLnUjW9tvSRjk.tar.zst",
 }
 
+import pf.OsStr
 import pf.Stdin
 import pf.Stdout
-import pf.Utc
-import aoc.AoC {
-    stdin: Stdin.readToEnd,
-    stdout: Stdout.write,
-    time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
+import parser.String
+
+main! : List(OsStr) => Try({}, _)
+main! = |_args| {
+	bytes = Stdin.read_to_end!()?
+	input = Str.from_utf8(bytes) ? |err| InvalidUtf8(err)
+	Stdout.line!("Part 1: ${part1(input)}")?
+	Stdout.line!("Part 2: ${part2(input)}")?
+	Ok({})
 }
 
-main =
-    AoC.solve {
-        year: 2021,
-        day: 1,
-        title: "Sonar Sweep",
-        part1,
-        part2,
-    }
+part1 : Str -> Str
+part1 = |input| {
+	answer = count_depth_increases(parse_input(input))
+	"The number of depth increases is ${answer.to_str()}"
+}
 
-part1 : Str -> Result Str Str
-part1 = \input ->
-    input
-    |> parseInput
-    |> countDepthIncreases
-    |> Num.toStr
-    |> \answer -> Ok "The number of depth increases is $(answer)"
+part2 : Str -> Str
+part2 = |input| {
+	answer = count_depth_increases(sliding_window(parse_input(input)))
+	"The number of depth increases is ${answer.to_str()}"
+}
 
-part2 : Str -> Result Str Str
-part2 = \input ->
-    input
-    |> parseInput
-    |> slidingWindow
-    |> countDepthIncreases
-    |> Num.toStr
-    |> \answer -> Ok "The number of depth increases is $(answer)"
+parse_input : Str -> List(U64)
+parse_input = |content|
+	content
+		.split_on("\n")
+		.fold([], |numbers, line| numbers.append_if_ok(String.parse_str(String.digits, line)))
 
-parseInput : Str -> List U64
-parseInput = \content ->
-    content
-    |> Str.splitOn "\n"
-    |> List.keepOks Str.toU64
+count_depth_increases : List(U64) -> U64
+count_depth_increases = |depths|
+	match depths {
+		[] => 0
+		[first, .. as rest] => rest.fold(
+			{ last: first, count: 0 },
+			|state, depth| {
+				count = if depth > state.last state.count + 1 else state.count
+				{ last: depth, count }
+			},
+		).count
+	}
 
-expect parseInput "not-a-number\n123\n345\n678\n" == [123, 345, 678]
+sliding_window : List(U64) -> List(U64)
+sliding_window = |depths| sliding_window_help(depths, [])
 
-countDepthIncreases : List U64 -> U64
-countDepthIncreases = \depths ->
-    depths
-    |> List.walk
-        { last: 0, count: 0 }
-        \state, depth ->
-            next = { state & last: depth }
+sliding_window_help : List(U64), List(U64) -> List(U64)
+sliding_window_help = |depths, windows| match depths {
+	[a, b, c, .. as rest] => sliding_window_help([b, c].concat(rest), windows.append(a + b + c))
+	_ => windows
+}
 
-            when state.last is
-                0 -> next
-                l if l < depth -> { next & count: state.count + 1 }
-                _ -> next
-    |> .count
+## Non-numeric input lines are ignored.
+expect parse_input("not-a-number\n123\n345\n678\n") == [123, 345, 678]
 
-expect countDepthIncreases [] == 0
-expect countDepthIncreases [10, 15, 10] == 1
-expect countDepthIncreases [199, 200, 208, 210, 200, 207, 240, 269, 260, 263] == 7
+## Depth increases are counted relative to the previous reading.
+expect count_depth_increases([199, 200, 208, 210, 200, 207, 240, 269, 260, 263]) == 7
 
-slidingWindow : List U64 -> List U64
-slidingWindow = \depths ->
-    depths
-    |> List.walk
-        { n1: Nothing, n2: Nothing, filtered: [] }
-        \state, depth ->
-            when Pair state.n1 state.n2 is
-                Pair Nothing Nothing -> { n1: Just depth, n2: Nothing, filtered: [] }
-                Pair (Just n1) Nothing -> { n1: Just depth, n2: Just n1, filtered: [] }
-                Pair (Just n1) (Just n2) ->
-                    { n1: Just depth, n2: Just n1, filtered: List.append state.filtered (n1 + n2 + depth) }
-
-                Pair _ _ -> state
-    |> .filtered
-
-expect slidingWindow [1, 2, 3, 4, 5, 6] == [6, 9, 12, 15]
-expect slidingWindow [199, 200, 208, 210, 200, 207, 240, 269, 260, 263] == [607, 618, 618, 617, 647, 716, 769, 792]
+## Sliding windows contain the sums of each three adjacent readings.
+expect sliding_window([1, 2, 3, 4, 5, 6]) == [6, 9, 12, 15]

@@ -1,124 +1,137 @@
-app [main] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br",
-    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.2.0/tlS1ZkwSKSB87_3poSOXcwHyySe0WxWOWQbPmp7rxBw.tar.br",
-}
+app [main!] { pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.21.0-rc4/FvCh4vdqm3nBY6DWEfZ8RuGCVfjuMY43HA8KSNk9qVDn.tar.zst" }
 
+import pf.OsStr
 import pf.Stdin
 import pf.Stdout
-import pf.Utc
-import aoc.AoC {
-    stdin: Stdin.readToEnd,
-    stdout: Stdout.write,
-    time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
+
+main! : List(OsStr) => Try({}, _)
+main! = |_| {
+	input = Str.from_utf8(Stdin.read_to_end!()?) ? |err| InvalidUtf8(err)
+	answer = part1(input) ? |err| SolverFailed(err)
+	Stdout.line!("Part 1: ${answer}")?
+	Ok({})
 }
 
-main = AoC.solve { year: 2024, day: 9, title: "Disk Fragmenter", part1, part2 }
+part1 : Str -> Try(Str, [InvalidDigit(U8)])
+part1 = |input| {
+	dense = parse_dense_format(input)?
+	compacted = move_file_blocks(dense, 0, dense.len() - 1)
+	score : U64
+	score = compacted.fold_with_index(
+		0,
+		|sum, block, index|
+			if block == empty_block {
+				sum
+			} else {
+				sum + index * block.to_u64()
+			},
+	)
+	Ok(score.to_str())
+}
 
-part1 : Str -> Result Str [ParsingFailure Str, ParsingIncomplete Str]
-part1 = \input ->
-
-    dense = parse_dense_format input
-
-    compacted = move_file_blocks dense 0 (List.len dense - 1)
-
-    score =
-        List.walkWithIndex compacted 0u64 \sum, block, index ->
-            if block == e then
-                sum
-            else
-                sum + (index * (Num.toU64 block))
-
-    score |> Num.toStr |> Ok
-
-expect part1 example_input == Ok "1928"
-
-part2 : Str -> Result Str _
-part2 = \_input ->
-    Err TODO
-
-# expect part2 example_input == Ok "123"
+## The sample disk checksum is 1928 after block compaction.
+expect part1(example_input) == Ok("1928")
 
 example_input = "2333133121414131402"
 
-parse_dense_format : Str -> List U16
-parse_dense_format = \input ->
+parse_dense_format : Str -> Try(List(U16), [InvalidDigit(U8)])
+parse_dense_format = |input| parse_dense_help(input.trim().to_utf8(), Block(0), [])
 
-    help = \bytes, next, blocks ->
-        when bytes is
-            [] -> blocks
-            [first, .. as rest] ->
-                (new_blocks, new_next) = append_blocks blocks next (first - '0')
-                help rest new_next new_blocks
+parse_dense_help : List(U8), [Free(U16), Block(U16)], List(U16) -> Try(List(U16), [InvalidDigit(U8)])
+parse_dense_help = |bytes, next, blocks| {
+	match bytes {
+		[] => Ok(blocks)
+		[first, .. as rest] => {
+			if first < '0' or first > '9' {
+				Err(InvalidDigit(first))
+			} else {
+				appended = append_blocks(blocks, next, first - '0')
+				parse_dense_help(rest, appended.next, appended.blocks)
+			}
+		}
+	}
+}
 
-    input |> Str.trim |> Str.toUtf8 |> help (Block 0) []
+## Dense-format parsing alternates file and free blocks.
+expect {
+	actual = parse_dense_format(example_input)?
+	actual == [0, 0, empty_block, empty_block, empty_block, 1, 1, 1, empty_block, empty_block, empty_block, 2, empty_block, empty_block, empty_block, 3, 3, 3, empty_block, 4, 4, empty_block, 5, 5, 5, 5, empty_block, 6, 6, 6, 6, empty_block, 7, 7, 7, empty_block, 8, 8, 8, 8, 9, 9]
+}
 
-expect
-    a = parse_dense_format example_input
-    a == [0, 0, e, e, e, 1, 1, 1, e, e, e, 2, e, e, e, 3, 3, 3, e, 4, 4, e, 5, 5, 5, 5, e, 6, 6, 6, 6, e, 7, 7, 7, e, 8, 8, 8, 8, 9, 9]
+append_blocks : List(U16), [Free(U16), Block(U16)], U8 -> { blocks : List(U16), next : [Free(U16), Block(U16)] }
+append_blocks = |blocks, next, len| {
+	match next {
+		Free(id) => { blocks: blocks.concat(List.repeat(empty_block, len.to_u64())), next: Block(id) }
+		Block(id) => { blocks: blocks.concat(List.repeat(id, len.to_u64())), next: Free(id + 1) }
+	}
+}
 
-append_blocks : List U16, [Free U16, Block U16], U8 -> (List U16, [Free U16, Block U16])
-append_blocks = \blocks, next, len ->
-    when next is
-        Free id ->
-            new_blocks = List.range { start: At 0, end: Before len } |> List.map \_ -> e
-            (List.concat blocks new_blocks, Block id)
+## Free spans append empty blocks.
+expect append_blocks([], Free(2), 2) == { blocks: [empty_block, empty_block], next: Block(2) }
 
-        Block id ->
-            new_blocks = List.range { start: At 0, end: Before len } |> List.map \_ -> id
-            (List.concat blocks new_blocks, Free (id + 1))
+## File spans append the current file identifier.
+expect append_blocks([1, 1], Block(2), 3) == { blocks: [1, 1, 2, 2, 2], next: Free(3) }
 
-expect
-    a = append_blocks [] (Free 2) 2
-    a == ([e, e], Block 2)
+move_file_blocks : List(U16), U64, U64 -> List(U16)
+move_file_blocks = |blocks, left_free, right_block| {
+	match (shift_right(blocks, left_free), shift_left(blocks, right_block)) {
+		(Ok(left), Ok(right)) if left < right => {
+			match blocks.swap(left, right) {
+				Ok(swapped) => move_file_blocks(swapped, left, right)
+				Err(_) => blocks
+			}
+		}
+		_ => blocks
+	}
+}
 
-expect
-    a = append_blocks [1, 1] (Block 2) 3
-    a == ([1, 1, 2, 2, 2], Free 3)
+## Block movement fills free space from the right edge.
+expect {
+	blocks = [0, empty_block, empty_block, 1, 1, 1, empty_block, empty_block, empty_block, empty_block, 2, 2, 2, 2, 2]
+	move_file_blocks(blocks, 0, blocks.len() - 1) == [0, 2, 2, 1, 1, 1, 2, 2, 2, empty_block, empty_block, empty_block, empty_block, empty_block, empty_block]
+}
 
-move_file_blocks : List U16, U64, U64 -> List U16
-move_file_blocks = \blocks, left_free, right_block ->
-    when (shift_right blocks left_free, shift_left blocks right_block) is
-        (Ok left, Ok right) if left < right -> move_file_blocks (List.swap blocks left right) left right
-        _ -> blocks
+## The sample dense disk compacts to the expected block ordering.
+expect {
+	blocks = [0, 0, empty_block, empty_block, empty_block, 1, 1, 1, empty_block, empty_block, empty_block, 2, empty_block, empty_block, empty_block, 3, 3, 3, empty_block, 4, 4, empty_block, 5, 5, 5, 5, empty_block, 6, 6, 6, 6, empty_block, 7, 7, 7, empty_block, 8, 8, 8, 8, 9, 9]
+	move_file_blocks(blocks, 0, blocks.len() - 1) == [0, 0, 9, 9, 8, 1, 1, 1, 8, 8, 8, 2, 7, 7, 7, 3, 3, 3, 6, 4, 4, 6, 5, 5, 5, 5, 6, 6, empty_block, empty_block, empty_block, empty_block, empty_block, empty_block, empty_block, empty_block, empty_block, empty_block, empty_block, empty_block, empty_block, empty_block]
+}
 
-expect
-    blocks = [0, e, e, 1, 1, 1, e, e, e, e, 2, 2, 2, 2, 2]
-    a = move_file_blocks blocks 0 (List.len blocks - 1)
-    a == [0, 2, 2, 1, 1, 1, 2, 2, 2, e, e, e, e, e, e]
+shift_right : List(U16), U64 -> Try(U64, [NoEmptyBlocks])
+shift_right = |blocks, index| {
+	match blocks.get(index) {
+		Ok(block) if block == empty_block => Ok(index)
+		Ok(_) if index + 1 < blocks.len() => shift_right(blocks, index + 1)
+		_ => Err(NoEmptyBlocks)
+	}
+}
 
-expect
-    blocks = [0, 0, e, e, e, 1, 1, 1, e, e, e, 2, e, e, e, 3, 3, 3, e, 4, 4, e, 5, 5, 5, 5, e, 6, 6, 6, 6, e, 7, 7, 7, e, 8, 8, 8, 8, 9, 9]
-    a = move_file_blocks blocks 0 (List.len blocks - 1)
-    a == [0, 0, 9, 9, 8, 1, 1, 1, 8, 8, 8, 2, 7, 7, 7, 3, 3, 3, 6, 4, 4, 6, 5, 5, 5, 5, 6, 6, e, e, e, e, e, e, e, e, e, e, e, e, e, e]
+## Right shifting locates the first empty block.
+expect shift_right([1, 1, empty_block, empty_block], 0) == Ok(2)
 
-# move right until index points at an empty block
-shift_right : List U16, U64 -> Result U64 [NoEmptyBlocks]
-shift_right = \blocks, i ->
-    if List.get blocks i == Ok e then
-        Ok i
-    else if i < List.len blocks then
-        shift_right blocks (i + 1)
-    else
-        Err NoEmptyBlocks
+## Right shifting accepts an already-empty position.
+expect shift_right([1, 1, empty_block, empty_block], 2) == Ok(2)
 
-expect shift_right [1, 1, e, e] 0 == Ok 2
-expect shift_right [1, 1, e, e] 2 == Ok 2
-expect shift_right [1, 1, 1, 1] 2 == Err NoEmptyBlocks
+## Right shifting reports a full disk.
+expect shift_right([1, 1, 1, 1], 2) == Err(NoEmptyBlocks)
 
-# move left until index points at an full block
-shift_left : List U16, U64 -> Result U64 [NoFullBlocks]
-shift_left = \blocks, i ->
-    if List.get blocks i != Ok e then
-        Ok i
-    else if i > 0 then
-        shift_left blocks (i - 1)
-    else
-        Err NoFullBlocks
+shift_left : List(U16), U64 -> Try(U64, [NoFullBlocks])
+shift_left = |blocks, index| {
+	match blocks.get(index) {
+		Ok(block) if block != empty_block => Ok(index)
+		Ok(_) if index > 0 => shift_left(blocks, index - 1)
+		_ => Err(NoFullBlocks)
+	}
+}
 
-expect shift_left [1, 1, e, e] 3 == Ok 1
-expect shift_left [1, 1, e, e] 1 == Ok 1
-expect shift_left [e, e, e, e] 2 == Err NoFullBlocks
+## Left shifting locates the final full block.
+expect shift_left([1, 1, empty_block, empty_block], 3) == Ok(1)
 
-# empty block
-e : U16
-e = Num.maxU16
+## Left shifting accepts an already-full position.
+expect shift_left([1, 1, empty_block, empty_block], 1) == Ok(1)
+
+## Left shifting reports an empty disk.
+expect shift_left([empty_block, empty_block, empty_block, empty_block], 2) == Err(NoFullBlocks)
+
+empty_block : U16
+empty_block = 65535

@@ -1,202 +1,150 @@
-app [main] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br",
-    parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/0.9.0/w8YKp2YAgQt5REYk912HfKAHBjcXsrnvtjI0CBzoAT4.tar.br",
-    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.2.0/tlS1ZkwSKSB87_3poSOXcwHyySe0WxWOWQbPmp7rxBw.tar.br",
+app [main!] {
+	pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.21.0-rc4/FvCh4vdqm3nBY6DWEfZ8RuGCVfjuMY43HA8KSNk9qVDn.tar.zst",
+	parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/1.0.2/FrnJ4RGDKpQyoDyESNoBwFNviY4ZGbMVLnUjW9tvSRjk.tar.zst",
 }
 
+import pf.OsStr
 import pf.Stdin
 import pf.Stdout
-import parser.String exposing [parseStr, digits, string, codeunit]
-import parser.Parser exposing [Parser, sepBy]
-import pf.Utc
-import aoc.AoC {
-    stdin: Stdin.readToEnd,
-    stdout: Stdout.write,
-    time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
+import parser.Parser exposing [Parser]
+import parser.String
+
+Rule : { before : U64, after : U64 }
+
+Input : { rules : List(Rule), updates : List(List(U64)) }
+
+main! : List(OsStr) => Try({}, _)
+main! = |_| {
+	input = Str.from_utf8(Stdin.read_to_end!()?) ? |err| InvalidUtf8(err)
+	answer1 = part1(input) ? |err| SolverFailed(Str.inspect(err))
+	answer2 = part2(input) ? |err| SolverFailed(Str.inspect(err))
+	Stdout.line!("Part 1: ${answer1}")?
+	Stdout.line!("Part 2: ${answer2}")?
+	Ok({})
 }
 
-main = AoC.solve { year: 2024, day: 5, title: "Print Queue", part1, part2 }
+part1 : Str -> Try(Str, _)
+part1 = |input| {
+	{ rules, updates } = parse(input.trim())?
+	total = updates.keep_if(|update| rules.all(|rule| check_rule(update, rule))).map(get_middle).sum()
+	Ok(total.to_str())
+}
 
-part1 : Str -> Result Str [ParsingFailure Str, ParsingIncomplete Str]
-part1 = \input ->
+## Part one sums middle pages from updates already in the right order.
+expect part1(example_input) == Ok("143")
 
-    { rules, updates } = try parse (Str.trim input)
+part2 : Str -> Try(Str, [CyclicRules, ParsingFailure(Str), ParsingIncomplete(Str)])
+part2 = |input| {
+	{ rules, updates } = parse(input.trim())?
+	initial : Try(U64, [CyclicRules])
+	initial = Ok(0)
+	total = updates.keep_if(|update| rules.any(|rule| !check_rule(update, rule))).fold(
+		initial,
+		|result, update| {
+			sum = result?
+			ordered = order_update(update, rules)?
+			Ok(sum + get_middle(ordered))
+		},
+	)?
+	Ok(total.to_str())
+}
 
-    filtered : List (List U64)
-    filtered = List.keepIf updates \update -> List.all rules \rule -> checkRule update rule
+## Part two reorders invalid updates before summing their middle pages.
+expect part2(example_input) == Ok("123")
 
-    middles : List U64
-    middles = List.map filtered getMiddle
+check_rule : List(U64), Rule -> Bool
+check_rule = |update, { before, after }| match update.keep_if(|number| number == before or number == after) {
+	[first, second] => first == before and second == after
+	_ => Bool.True
+}
 
-    middles |> List.sum |> Num.toStr |> Ok
+## A correctly ordered update satisfies a relevant rule.
+expect check_rule([75, 47, 61, 53, 29], { before: 47, after: 53 })
 
-expect part1 exampleInput == Ok "143"
+order_update : List(U64), List(Rule) -> Try(List(U64), [CyclicRules])
+order_update = |update, rules| order_pages(update, rules, [])
 
-part2 : Str -> Result Str _
-part2 = \input ->
-    { rules, updates } = try parse (Str.trim input)
+order_pages : List(U64), List(Rule), List(U64) -> Try(List(U64), [CyclicRules])
+order_pages = |remaining, rules, ordered| match remaining {
+	[] => Ok(ordered)
+	_ => match remaining.find_first(
+		|page|
+			!rules.any(|rule| rule.after == page and remaining.contains(rule.before)),
+	) {
+		Ok(next) => order_pages(remaining.keep_if(|page| page != next), rules, ordered.append(next))
+		Err(_) => Err(CyclicRules)
+	}
+}
 
-    filtered : List (List U64)
-    filtered = List.keepIf updates \update -> List.any rules \rule -> !(checkRule update rule)
+## Ordering uses the transitive rule graph rather than repeated pair swaps.
+expect order_update([3, 2, 1], [{ before: 1, after: 2 }, { before: 2, after: 3 }]) == Ok([1, 2, 3])
 
-    reordered = List.map filtered \update -> applyRulesRecursive update rules
+## Cyclic ordering rules return a structured error.
+expect order_update([1, 2], [{ before: 1, after: 2 }, { before: 2, after: 1 }]) == Err(CyclicRules)
 
-    middles : List U64
-    middles = List.map reordered getMiddle
+get_middle : List(U64) -> U64
+get_middle = |numbers| {
+	if numbers.is_empty() or numbers.len() % 2 == 0 {
+		crash "expected an odd, non-empty update"
+	}
+	numbers.get(numbers.len() / 2) ?? {
+		crash "middle index must be in bounds"
+	}
+}
 
-    middles |> List.sum |> Num.toStr |> Ok
+## The middle page is selected from an odd-length update.
+expect get_middle([1, 2, 3, 4, 5]) == 3
 
-expect part2 exampleInput == Ok "123"
+parse : Str -> Try(Input, _)
+parse = |input| String.parse_str(parse_input, input)
 
-checkRule : List U64, { before : U64, after : U64 } -> Bool
-checkRule = \update, { before, after } ->
-    when List.keepIf update \n -> n == before || n == after is
-        [a, b] -> a == before && b == after
-        _ -> Bool.true
+parse_rule : Parser(String.Utf8, Rule)
+parse_rule = {
+	before: String.digits.skip(String.codeunit('|')),
+	after: String.digits,
+}.Parser
 
-expect checkRule [75, 47, 61, 53, 29] { before: 47, after: 53 }
+## Rule parsing reads the before and after page numbers.
+expect String.parse_str(parse_rule, "47|53") == Ok({ before: 47, after: 53 })
 
-reorderRule : List U64, { before : U64, after : U64 } -> [Swapped (List U64), NoChange]
-reorderRule = \update, { before, after } ->
+parse_update : Parser(String.Utf8, List(U64))
+parse_update = String.digits.sep_by(String.codeunit(','))
 
-    init : { before : [Some U64, None], after : [Some U64, None] }
-    init = { before: None, after: None }
+## Update parsing reads comma-separated page numbers.
+expect String.parse_str(parse_update, "75,47,61,53,29") == Ok([75, 47, 61, 53, 29])
 
-    idxs =
-        List.walkWithIndex update init \state, n, i ->
-            if n == before then
-                { state & before: Some i }
-            else if n == after then
-                { state & after: Some i }
-            else
-                state
+parse_input : Parser(String.Utf8, Input)
+parse_input = {
+	rules: parse_rule.sep_by(String.codeunit('\n')).skip(String.string("\n\n")),
+	updates: parse_update.sep_by(String.codeunit('\n')),
+}.Parser
 
-    when (idxs.before, idxs.after) is
-        (Some b, Some a) if b > a -> List.swap update b a |> Swapped
-        _ -> NoChange
-
-expect reorderRule [75, 47, 61, 53, 29] { before: 47, after: 53 } == NoChange
-expect reorderRule [75, 53, 61, 47, 29] { before: 47, after: 53 } == Swapped [75, 47, 61, 53, 29]
-
-applyRulesRecursive : List U64, List { before : U64, after : U64 } -> List U64
-applyRulesRecursive = \update, rules ->
-    List.walkUntil rules NoChange \_, rule ->
-        when reorderRule update rule is
-            Swapped new -> Break (Swapped new)
-            NoChange -> Continue NoChange
-    |> \outcome ->
-        when outcome is
-            Swapped new -> applyRulesRecursive new rules
-            NoChange -> update
-
-expect
-    update = [75, 47, 61, 53, 29]
-    rules = [
-        { before: 61, after: 47 },
-        { before: 99, after: 47 },
-        { before: 47, after: 75 },
-    ]
-    actual = applyRulesRecursive update rules
-    actual == [61, 47, 75, 53, 29]
-
-getMiddle : List U64 -> U64
-getMiddle = \numbers ->
-    when numbers is
-        [middle] -> middle
-        _ -> getMiddle (numbers |> List.dropFirst 1 |> List.dropLast 1)
-
-expect getMiddle [1, 2, 3, 4, 5] == 3
-
-parse : Str -> Result { rules : List { before : U64, after : U64 }, updates : List (List U64) } _
-parse = \input ->
-    parser = { Parser.map2 <-
-        rules: sepBy parseRule (codeunit '\n'),
-        _: string "\n\n",
-        updates: sepBy parseUpdate (codeunit '\n'),
-    }
-
-    parseStr parser input
-
-parseRule : Parser _ { before : U64, after : U64 }
-parseRule =
-    { Parser.map2 <-
-        before: digits,
-        _: codeunit '|',
-        after: digits,
-    }
-
-expect parseStr parseRule "47|53" == Ok { before: 47, after: 53 }
-
-parseUpdate : Parser _ (List U64)
-parseUpdate = sepBy digits (codeunit ',')
-
-expect parseStr parseUpdate "75,47,61,53,29" == Ok [75, 47, 61, 53, 29]
-
-expect
-    actual = parse exampleInput
-    actual
-    == Ok {
-        rules: [
-            { before: 47, after: 53 },
-            { before: 97, after: 13 },
-            { before: 97, after: 61 },
-            { before: 97, after: 47 },
-            { before: 75, after: 29 },
-            { before: 61, after: 13 },
-            { before: 75, after: 53 },
-            { before: 29, after: 13 },
-            { before: 97, after: 29 },
-            { before: 53, after: 29 },
-            { before: 61, after: 53 },
-            { before: 97, after: 53 },
-            { before: 61, after: 29 },
-            { before: 47, after: 13 },
-            { before: 75, after: 47 },
-            { before: 97, after: 75 },
-            { before: 47, after: 61 },
-            { before: 75, after: 61 },
-            { before: 47, after: 29 },
-            { before: 75, after: 13 },
-            { before: 53, after: 13 },
-        ],
-        updates: [
-            [75, 47, 61, 53, 29],
-            [97, 61, 53, 29, 13],
-            [75, 29, 13],
-            [75, 97, 47, 61, 53],
-            [61, 13, 29],
-            [97, 13, 75, 29, 47],
-        ],
-    }
-
-exampleInput =
-    """
-    47|53
-    97|13
-    97|61
-    97|47
-    75|29
-    61|13
-    75|53
-    29|13
-    97|29
-    53|29
-    61|53
-    97|53
-    61|29
-    47|13
-    75|47
-    97|75
-    47|61
-    75|61
-    47|29
-    75|13
-    53|13
-
-    75,47,61,53,29
-    97,61,53,29,13
-    75,29,13
-    75,97,47,61,53
-    61,13,29
-    97,13,75,29,47
-    """
+example_input = 
+	\\47|53
+	\\97|13
+	\\97|61
+	\\97|47
+	\\75|29
+	\\61|13
+	\\75|53
+	\\29|13
+	\\97|29
+	\\53|29
+	\\61|53
+	\\97|53
+	\\61|29
+	\\47|13
+	\\75|47
+	\\97|75
+	\\47|61
+	\\75|61
+	\\47|29
+	\\75|13
+	\\53|13
+	\\
+	\\75,47,61,53,29
+	\\97,61,53,29,13
+	\\75,29,13
+	\\75,97,47,61,53
+	\\61,13,29
+	\\97,13,75,29,47
