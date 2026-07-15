@@ -51,11 +51,10 @@ example_input =
 	\\3   3
 
 parse_location_ids : Parser(String.Utf8, { first : U64, second : U64 })
-parse_location_ids = 
-	Parser.const(|first| |second| { first, second })
-		.keep(String.digits)
-		.skip(String.string("   "))
-		.keep(String.digits)
+parse_location_ids = {
+	first: String.digits.skip(String.string("   ")),
+	second: String.digits,
+}.Parser
 
 ## A location row parses both identifiers.
 expect String.parse_str(parse_location_ids, "3   4") == Ok({ first: 3, second: 4 })

@@ -44,15 +44,12 @@ parse_input = |input|
 	String.parse_str(assignment_pair_parser.sep_by(String.codeunit('\n')), input.trim())
 
 assignment_pair_parser : Parser(String.Utf8, AssignmentPair)
-assignment_pair_parser = 
-	Parser.const(|start_a| |end_a| |start_b| |end_b| { start_a, end_a, start_b, end_b })
-		.keep(String.digits)
-		.skip(String.codeunit('-'))
-		.keep(String.digits)
-		.skip(String.codeunit(','))
-		.keep(String.digits)
-		.skip(String.codeunit('-'))
-		.keep(String.digits)
+assignment_pair_parser = {
+	start_a: String.digits.skip(String.codeunit('-')),
+	end_a: String.digits.skip(String.codeunit(',')),
+	start_b: String.digits.skip(String.codeunit('-')),
+	end_b: String.digits,
+}.Parser
 
 is_fully_contained : AssignmentPair -> Bool
 is_fully_contained = |{ start_a, end_a, start_b, end_b }|

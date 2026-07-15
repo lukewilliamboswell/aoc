@@ -55,12 +55,10 @@ parse_cube = String.one_of([
 expect String.parse_str(parse_cube, "64 green") == Ok(Green(64))
 
 parse_game : Parser(String.Utf8, Game)
-parse_game = 
-	Parser.const(|id| |reveals| { id, reveals })
-		.skip(String.string("Game "))
-		.keep(String.digits)
-		.skip(String.string(": "))
-		.keep(parse_cube.sep_by(String.string(", ")).sep_by(String.string("; ")))
+parse_game = {
+	id: Parser.const(|id| id).skip(String.string("Game ")).keep(String.digits).skip(String.string(": ")),
+	reveals: parse_cube.sep_by(String.string(", ")).sep_by(String.string("; ")),
+}.Parser
 
 ## A game parser groups cubes by reveal.
 expect String.parse_str(parse_game, "Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green")

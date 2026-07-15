@@ -60,12 +60,11 @@ parse_seeds = Parser.const(|seeds| seeds)
 expect String.parse_str(parse_seeds, "seeds: 79 14 55 13") == Ok([79, 14, 55, 13])
 
 parse_map_entry : Parser(String.Utf8, MapEntry)
-parse_map_entry = Parser.const(|destination| |source| |length| { source, destination, length })
-	.keep(String.digits)
-	.skip(String.codeunit(' '))
-	.keep(String.digits)
-	.skip(String.codeunit(' '))
-	.keep(String.digits)
+parse_map_entry = {
+	destination: String.digits.skip(String.codeunit(' ')),
+	source: String.digits.skip(String.codeunit(' ')),
+	length: String.digits,
+}.Parser
 
 parse_map : Str -> Parser(String.Utf8, Map)
 parse_map = |heading|
@@ -81,28 +80,29 @@ expect String.parse_str(parse_map("seed-to-soil"), "seed-to-soil map:\n50 98 2\n
 	])
 
 parse_model : Parser(String.Utf8, Model)
-parse_model = 
-	Parser.const(
-		|seeds| |seed_to_soil| |soil_to_fertilizer| |fertilizer_to_water| |water_to_light| |light_to_temperature| |temperature_to_humidity| |humidity_to_location| {
-			seeds,
-			maps: [seed_to_soil, soil_to_fertilizer, fertilizer_to_water, water_to_light, light_to_temperature, temperature_to_humidity, humidity_to_location],
-		},
-	)
-		.keep(parse_seeds)
-		.skip(String.string("\n\n"))
-		.keep(parse_map("seed-to-soil"))
-		.skip(String.string("\n\n"))
-		.keep(parse_map("soil-to-fertilizer"))
-		.skip(String.string("\n\n"))
-		.keep(parse_map("fertilizer-to-water"))
-		.skip(String.string("\n\n"))
-		.keep(parse_map("water-to-light"))
-		.skip(String.string("\n\n"))
-		.keep(parse_map("light-to-temperature"))
-		.skip(String.string("\n\n"))
-		.keep(parse_map("temperature-to-humidity"))
-		.skip(String.string("\n\n"))
-		.keep(parse_map("humidity-to-location"))
+parse_model = {
+	seeds: parse_seeds.skip(String.string("\n\n")),
+	seed_to_soil: parse_map("seed-to-soil").skip(String.string("\n\n")),
+	soil_to_fertilizer: parse_map("soil-to-fertilizer").skip(String.string("\n\n")),
+	fertilizer_to_water: parse_map("fertilizer-to-water").skip(String.string("\n\n")),
+	water_to_light: parse_map("water-to-light").skip(String.string("\n\n")),
+	light_to_temperature: parse_map("light-to-temperature").skip(String.string("\n\n")),
+	temperature_to_humidity: parse_map("temperature-to-humidity").skip(String.string("\n\n")),
+	humidity_to_location: parse_map("humidity-to-location"),
+}.Parser.map(
+	|parsed| {
+		seeds: parsed.seeds,
+		maps: [
+			parsed.seed_to_soil,
+			parsed.soil_to_fertilizer,
+			parsed.fertilizer_to_water,
+			parsed.water_to_light,
+			parsed.light_to_temperature,
+			parsed.temperature_to_humidity,
+			parsed.humidity_to_location,
+		],
+	},
+)
 
 example_input = 
 	\\seeds: 79 14 55 13

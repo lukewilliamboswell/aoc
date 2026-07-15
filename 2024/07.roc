@@ -88,11 +88,10 @@ concat_digits = |left, right| U64.from_str("${left.to_str()}${right.to_str()}")
 expect concat_digits(15, 6) == Ok(156)
 
 parse_calibration : Parser(String.Utf8, Calibration)
-parse_calibration = 
-	Parser.const(|target| |inputs| { target, inputs })
-		.keep(String.digits)
-		.skip(String.string(": "))
-		.keep(String.digits.sep_by(String.codeunit(' ')))
+parse_calibration = {
+	target: String.digits.skip(String.string(": ")),
+	inputs: String.digits.sep_by(String.codeunit(' ')),
+}.Parser
 
 ## Calibration parsing separates the target from its inputs.
 expect String.parse_str(parse_calibration, "190: 10 19") == Ok({ target: 190, inputs: [10, 19] })

@@ -44,16 +44,11 @@ expect part2(example_input) == Ok("The total number is 30 scratchcards.")
 parse_card : Parser(String.Utf8, Card)
 parse_card = {
 	spaces = String.codeunit(' ').one_or_more()
-	Parser.const(|id| |winning| |picks| { id, winning, picks })
-		.skip(String.string("Card"))
-		.skip(spaces)
-		.keep(String.digits)
-		.skip(String.codeunit(':'))
-		.skip(spaces)
-		.keep(String.digits.sep_by(spaces))
-		.skip(String.string(" |"))
-		.skip(spaces)
-		.keep(String.digits.sep_by(spaces))
+	{
+		id: Parser.const(|id| id).skip(String.string("Card")).skip(spaces).keep(String.digits).skip(String.codeunit(':')).skip(spaces),
+		winning: String.digits.sep_by(spaces).skip(String.string(" |")).skip(spaces),
+		picks: String.digits.sep_by(spaces),
+	}.Parser
 }
 
 example_card = {

@@ -112,10 +112,10 @@ parse : Str -> Try(Input, _)
 parse = |input| String.parse_str(parse_input, input)
 
 parse_rule : Parser(String.Utf8, Rule)
-parse_rule = Parser.const(|before| |after| { before, after })
-	.keep(String.digits)
-	.skip(String.codeunit('|'))
-	.keep(String.digits)
+parse_rule = {
+	before: String.digits.skip(String.codeunit('|')),
+	after: String.digits,
+}.Parser
 
 ## Rule parsing reads the before and after page numbers.
 expect String.parse_str(parse_rule, "47|53") == Ok({ before: 47, after: 53 })
@@ -127,10 +127,10 @@ parse_update = String.digits.sep_by(String.codeunit(','))
 expect String.parse_str(parse_update, "75,47,61,53,29") == Ok([75, 47, 61, 53, 29])
 
 parse_input : Parser(String.Utf8, Input)
-parse_input = Parser.const(|rules| |updates| { rules, updates })
-	.keep(parse_rule.sep_by(String.codeunit('\n')))
-	.skip(String.string("\n\n"))
-	.keep(parse_update.sep_by(String.codeunit('\n')))
+parse_input = {
+	rules: parse_rule.sep_by(String.codeunit('\n')).skip(String.string("\n\n")),
+	updates: parse_update.sep_by(String.codeunit('\n')),
+}.Parser
 
 example_input = 
 	\\47|53
