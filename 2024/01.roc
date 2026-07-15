@@ -34,8 +34,11 @@ expect part1(example_input) == Ok("The total distance between the lists is 11.")
 part2 : Str -> Try(Str, _)
 part2 = |input| {
 	numbers = String.parse_str(parse_location_ids.sep_by(String.codeunit('\n')), input.trim())?
-	{ first, second } = split_and_sort(numbers)
-	similarity = calc_similarity(first, second, 0)
+	right_counts = numbers.fold(
+		Dict.empty(),
+		|counts, item| counts.insert(item.second, (counts.get(item.second) ?? 0) + 1),
+	)
+	similarity = numbers.fold(0, |total, item| total + item.first * (right_counts.get(item.first) ?? 0))
 	Ok("The similarity score is ${similarity.to_str()}.")
 }
 
@@ -73,17 +76,6 @@ calc_distance = |first, second, score| {
 		([a, .. as rest_a], [b, .. as rest_b]) => calc_distance(rest_a, rest_b, score + a.abs_diff(b))
 		_ => {
 			crash "expected input lists to be the same length"
-		}
-	}
-}
-
-calc_similarity : List(U64), List(U64), U64 -> U64
-calc_similarity = |first, second, score| {
-	match first {
-		[] => score
-		[a, .. as rest] => {
-			count = second.count_if(|b| a == b)
-			calc_similarity(rest, second, score + a * count)
 		}
 	}
 }

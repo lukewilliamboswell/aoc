@@ -37,25 +37,29 @@ parse : Str -> Try(List(U64), _)
 parse = |input| String.parse_str(String.digits.sep_by(String.codeunit('\n')), input.trim())
 
 find_pair : List(U64) -> Try({ x : U64, y : U64 }, [NoPair])
-find_pair = |numbers| {
-	pairs = numbers.fold([], |all, x| all.concat(numbers.map(|y| { x, y })))
-	match pairs.find_first(|{ x, y }| x + y == 2020) {
-		Ok(pair) => Ok(pair)
-		Err(_) => Err(NoPair)
+find_pair = |numbers| Ok(find_pair_sum(numbers, 2020) ? |_| NoPair)
+
+find_pair_sum : List(U64), U64 -> Try({ x : U64, y : U64 }, [NotFound])
+find_pair_sum = |numbers, target| match numbers {
+	[] => Err(NotFound)
+	[x, .. as rest] if x <= target => match rest.find_first(|y| x + y == target) {
+		Ok(y) => Ok({ x, y })
+		Err(_) => find_pair_sum(rest, target)
 	}
+	[_, .. as rest] => find_pair_sum(rest, target)
 }
 
 find_triple : List(U64) -> Try({ x : U64, y : U64, z : U64 }, [NoTriple])
-find_triple = |numbers| {
-	triples = numbers.fold(
-		[],
-		|all, x|
-			all.concat(numbers.fold([], |for_x, y| for_x.concat(numbers.map(|z| { x, y, z })))),
-	)
-	match triples.find_first(|{ x, y, z }| x + y + z == 2020) {
-		Ok(triple) => Ok(triple)
-		Err(_) => Err(NoTriple)
+find_triple = |numbers| Ok(find_triple_sum(numbers, 2020) ? |_| NoTriple)
+
+find_triple_sum : List(U64), U64 -> Try({ x : U64, y : U64, z : U64 }, [NotFound])
+find_triple_sum = |numbers, target| match numbers {
+	[] => Err(NotFound)
+	[x, .. as rest] if x <= target => match find_pair_sum(rest, target - x) {
+		Ok({ x: y, y: z }) => Ok({ x, y, z })
+		Err(_) => find_triple_sum(rest, target)
 	}
+	[_, .. as rest] => find_triple_sum(rest, target)
 }
 
 example = 
@@ -74,3 +78,6 @@ expect part2(example) == Ok("979 * 366 * 675 = 241861950")
 
 ## Input lines parse as unsigned integers.
 expect parse(example)? == [1721, 979, 366, 299, 675, 1456]
+
+## Expense entries cannot be reused to form a pair.
+expect find_pair([1010]) == Err(NoPair)

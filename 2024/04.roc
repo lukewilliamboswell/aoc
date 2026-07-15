@@ -4,11 +4,32 @@ import pf.OsStr
 import pf.Stdin
 import pf.Stdout
 
-Grid : List(List(U8))
-
 Coord : { row : I64, col : I64 }
 
 Direction : { row : I64, col : I64 }
+
+Grid := List(List(U8)).{
+	from_str : Str -> Grid
+	from_str = |input| Grid.(input.trim().split_on("\n").map(Str.to_utf8))
+
+	rows : Grid -> List(List(U8))
+	rows = |Grid.(grid_rows)| grid_rows
+
+	at : Grid, Coord -> [Found(U8), Missing]
+	at = |Grid.(grid_rows), { row, col }| {
+		if row < 0 or col < 0 {
+			Missing
+		} else {
+			match grid_rows.get(row.to_u64_wrap()) {
+				Ok(line) => match line.get(col.to_u64_wrap()) {
+					Ok(byte) => Found(byte)
+					Err(_) => Missing
+				}
+				Err(_) => Missing
+			}
+		}
+	}
+}
 
 main! : List(OsStr) => Try({}, _)
 main! = |_| {
@@ -20,12 +41,21 @@ main! = |_| {
 
 part1 : Str -> Str
 part1 = |input| {
-	grid = to_grid(input)
-	total = all_coordinates(grid).map(
-		|start|
-			directions.count_if(|direction| spells_xmas(grid, start, direction)),
-	).sum()
-	total.to_str()
+	grid = Grid.from_str(input)
+	var $total = 0.U64
+	var $row = 0.I64
+	for line in grid.rows() {
+		var $col = 0.I64
+		for _ in line {
+			start = { row: $row, col: $col }
+			for direction in directions if spells_xmas(grid, start, direction) {
+				$total = $total + 1
+			}
+			$col = $col + 1
+		}
+		$row = $row + 1
+	}
+	$total.to_str()
 }
 
 ## Part one finds XMAS in all eight directions.
@@ -33,47 +63,24 @@ expect part1(example_input) == "18"
 
 part2 : Str -> Str
 part2 = |input| {
-	grid = to_grid(input)
-	all_coordinates(grid).count_if(|middle| is_x_mas(grid, middle)).to_str()
+	grid = Grid.from_str(input)
+	var $total = 0.U64
+	var $row = 0.I64
+	for line in grid.rows() {
+		var $col = 0.I64
+		for _ in line {
+			if is_x_mas(grid, { row: $row, col: $col }) {
+				$total = $total + 1
+			}
+			$col = $col + 1
+		}
+		$row = $row + 1
+	}
+	$total.to_str()
 }
 
 ## Part two finds crossed MAS words centred on A.
 expect part2(example_input) == "9"
-
-to_grid : Str -> Grid
-to_grid = |input| input.trim().split_on("\n").map(Str.to_utf8)
-
-all_coordinates : Grid -> List(Coord)
-all_coordinates = |grid|
-	flatten(
-		grid.map_with_index(
-			|row, row_index|
-				row.map_with_index(
-					|_, col_index| {
-						row: row_index.to_i64_wrap(),
-						col: col_index.to_i64_wrap(),
-					},
-				),
-		),
-	)
-
-flatten : List(List(a)) -> List(a)
-flatten = |lists| lists.fold([], List.concat)
-
-at : Grid, Coord -> [Found(U8), Missing]
-at = |grid, { row, col }| {
-	if row < 0 or col < 0 {
-		Missing
-	} else {
-		match grid.get(row.to_u64_wrap()) {
-			Ok(line) => match line.get(col.to_u64_wrap()) {
-				Ok(byte) => Found(byte)
-				Err(_) => Missing
-			}
-			Err(_) => Missing
-		}
-	}
-}
 
 move : Coord, Direction, I64 -> Coord
 move = |start, direction, steps| {
@@ -83,10 +90,10 @@ move = |start, direction, steps| {
 
 spells_xmas : Grid, Coord, Direction -> Bool
 spells_xmas = |grid, start, direction|
-	at(grid, start) == Found('X')
-		and at(grid, move(start, direction, 1)) == Found('M')
-			and at(grid, move(start, direction, 2)) == Found('A')
-				and at(grid, move(start, direction, 3)) == Found('S')
+	grid.at(start) == Found('X')
+		and grid.at(move(start, direction, 1)) == Found('M')
+			and grid.at(move(start, direction, 2)) == Found('A')
+				and grid.at(move(start, direction, 3)) == Found('S')
 
 is_mas_pair : [Found(U8), Missing], [Found(U8), Missing] -> Bool
 is_mas_pair = |first, second|
@@ -95,11 +102,11 @@ is_mas_pair = |first, second|
 
 is_x_mas : Grid, Coord -> Bool
 is_x_mas = |grid, middle| {
-	if at(grid, middle) != Found('A') {
+	if grid.at(middle) != Found('A') {
 		Bool.False
 	} else {
-		is_mas_pair(at(grid, move(middle, { row: -1, col: -1 }, 1)), at(grid, move(middle, { row: 1, col: 1 }, 1)))
-			and is_mas_pair(at(grid, move(middle, { row: -1, col: 1 }, 1)), at(grid, move(middle, { row: 1, col: -1 }, 1)))
+		is_mas_pair(grid.at(move(middle, { row: -1, col: -1 }, 1)), grid.at(move(middle, { row: 1, col: 1 }, 1)))
+			and is_mas_pair(grid.at(move(middle, { row: -1, col: 1 }, 1)), grid.at(move(middle, { row: 1, col: -1 }, 1)))
 	}
 }
 

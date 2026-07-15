@@ -21,19 +21,22 @@ main! = |_args| {
 
 part1 : Str -> Try(Str, [NoInventories])
 part1 = |input| {
-	totals = parse(input).map(List.sum).sort_with(|a, b| U64.compare(b, a))
-	highest = totals.first() ? |_| NoInventories
+	highest = parse(input).map(List.sum).max() ? |_| NoInventories
 	Ok("The Elf with the highest calories has ${highest.to_str()} kCal")
 }
 
 part2 : Str -> Try(Str, [FewerThanThreeElves])
 part2 = |input| {
-	totals = parse(input).map(List.sum).sort_with(|a, b| U64.compare(b, a))
-	match totals {
+	top = parse(input).map(List.sum).fold([], insert_top_three)
+	match top {
 		[first, second, third, ..] => Ok("Total kCal the Elves are carrying is ${(first + second + third).to_str()}")
 		_ => Err(FewerThanThreeElves)
 	}
 }
+
+insert_top_three : List(U64), U64 -> List(U64)
+insert_top_three = |top, calories|
+	top.append(calories).sort_with(|a, b| U64.compare(b, a)).take_first(3)
 
 parse : Str -> List(List(U64))
 parse = |input|
@@ -71,3 +74,6 @@ expect part2(example_input) == Ok("Total kCal the Elves are carrying is 45000")
 
 ## Blank lines separate the inventories.
 expect parse(example_input) == [[1000, 2000, 3000], [4000], [5000, 6000], [7000, 8000, 9000], [10000]]
+
+## Top-three insertion remains sorted and bounded.
+expect insert_top_three([20, 10, 5], 15) == [20, 15, 10]

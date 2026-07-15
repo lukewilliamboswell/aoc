@@ -55,55 +55,36 @@ parse_report = String.digits.sep_by(String.codeunit(' '))
 expect String.parse_str(parse_report, "7 6 4 2 1") == Ok([7, 6, 4, 2, 1])
 
 is_increasing_safely : List(U64) -> Bool
-is_increasing_safely = |levels| {
-	match levels {
-		[first, .. as rest] => {
-			result = rest.fold_until(
-				Ok(first),
-				|maybe_prev, curr| {
-					prev = unwrap(maybe_prev)
-					if curr > prev and safe_difference(curr, prev) {
-						Continue(Ok(curr))
-					} else {
-						Break(Err({}))
-					}
-				},
-			)
-			match result {
-				Ok(_) => Bool.True
-				Err(_) => Bool.False
-			}
-		}
-		_ => {
-			crash "expected at least one level"
-		}
-	}
-}
+is_increasing_safely = |levels| levels_are_safe(levels, Increasing, NoSkip)
 
 is_decreasing_safely : List(U64) -> Bool
-is_decreasing_safely = |levels| {
-	match levels {
-		[first, .. as rest] => {
-			result = rest.fold_until(
-				Ok(first),
-				|maybe_prev, curr| {
-					prev = unwrap(maybe_prev)
-					if curr < prev and safe_difference(curr, prev) {
-						Continue(Ok(curr))
-					} else {
-						Break(Err({}))
+is_decreasing_safely = |levels| levels_are_safe(levels, Decreasing, NoSkip)
+
+levels_are_safe : List(U64), [Increasing, Decreasing], [NoSkip, Skip(U64)] -> Bool
+levels_are_safe = |levels, direction, skipped| {
+	var $previous = None
+	var $index = 0
+
+	for level in levels {
+		if skipped != Skip($index) {
+			match $previous {
+				Some(previous) => {
+					ordered = match direction {
+						Increasing => level > previous
+						Decreasing => level < previous
 					}
-				},
-			)
-			match result {
-				Ok(_) => Bool.True
-				Err(_) => Bool.False
+					if !ordered or !safe_difference(level, previous) {
+						return Bool.False
+					}
+				}
+				None => {}
 			}
+			$previous = Some(level)
 		}
-		_ => {
-			crash "expected at least one level"
-		}
+		$index = $index + 1
 	}
+
+	$previous != None
 }
 
 safe_difference : U64, U64 -> Bool
@@ -116,12 +97,27 @@ is_safe : List(U64) -> Bool
 is_safe = |levels| is_increasing_safely(levels) or is_decreasing_safely(levels)
 
 is_increasing_safely_tolerant : List(U64) -> Bool
-is_increasing_safely_tolerant = |levels|
-	levels.map_with_index(|_, idx| levels.drop_at(idx)).any(is_increasing_safely)
+is_increasing_safely_tolerant = |levels| safe_with_one_skip(levels, Increasing)
 
 is_decreasing_safely_tolerant : List(U64) -> Bool
-is_decreasing_safely_tolerant = |levels|
-	levels.map_with_index(|_, idx| levels.drop_at(idx)).any(is_decreasing_safely)
+is_decreasing_safely_tolerant = |levels| safe_with_one_skip(levels, Decreasing)
+
+safe_with_one_skip : List(U64), [Increasing, Decreasing] -> Bool
+safe_with_one_skip = |levels, direction| {
+	if levels_are_safe(levels, direction, NoSkip) {
+		return Bool.True
+	}
+
+	var $skip = 0
+	while $skip < levels.len() {
+		if levels_are_safe(levels, direction, Skip($skip)) {
+			return Bool.True
+		}
+		$skip = $skip + 1
+	}
+
+	Bool.False
+}
 
 is_safe_tolerant : List(U64) -> Bool
 is_safe_tolerant = |levels| is_increasing_safely_tolerant(levels) or is_decreasing_safely_tolerant(levels)

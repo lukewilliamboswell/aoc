@@ -49,11 +49,13 @@ count_depth_increases = |depths|
 	}
 
 sliding_window : List(U64) -> List(U64)
-sliding_window = |depths|
-	match depths {
-		[a, b, c, .. as rest] => [a + b + c].concat(sliding_window([b, c].concat(rest)))
-		_ => []
-	}
+sliding_window = |depths| sliding_window_help(depths, [])
+
+sliding_window_help : List(U64), List(U64) -> List(U64)
+sliding_window_help = |depths, windows| match depths {
+	[a, b, c, .. as rest] => sliding_window_help([b, c].concat(rest), windows.append(a + b + c))
+	_ => windows
+}
 
 ## Non-numeric input lines are ignored.
 expect parse_input("not-a-number\n123\n345\n678\n") == [123, 345, 678]
