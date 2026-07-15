@@ -3,7 +3,6 @@
 set -uo pipefail
 
 ROC="${ROC:-roc}"
-MAX_TRANSITIVE_MB="${ROC_MAX_TRANSITIVE_MB:-200}"
 status=0
 passed=0
 failed=0
@@ -62,8 +61,8 @@ run_check() {
 for file in "${roc_files[@]}"; do
     printf '%s%s%s\n' "$cyan" "$file" "$reset"
     run_check "$file" fmt fmt --check
-    run_check "$file" check check --max-transitive-mb="$MAX_TRANSITIVE_MB"
-    run_check "$file" test test --max-transitive-mb="$MAX_TRANSITIVE_MB"
+	run_check "$file" check check
+	run_check "$file" test test
 done
 
 echo

@@ -25,6 +25,4 @@ Set `ROC` to test with a different compiler binary:
 ROC=/path/to/roc ./ci/all_tests.sh
 ```
 
-The runner allows up to 200 MB of transitive Roc packages for the pinned platform. Override this with `ROC_MAX_TRANSITIVE_MB` if needed.
-
 GitHub Actions runs the same checks against the latest nightly Roc compiler.
