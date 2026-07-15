@@ -1,99 +1,87 @@
-app [main] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br",
-    aoc: "https://github.com/lukewilliamboswell/aoc-template/releases/download/0.2.0/tlS1ZkwSKSB87_3poSOXcwHyySe0WxWOWQbPmp7rxBw.tar.br",
-}
+app [main!] { pf: platform "../../basic-cli/platform/main.roc" }
 
+import pf.OsStr
 import pf.Stdin
 import pf.Stdout
-import pf.Utc
-import aoc.AoC {
-    stdin: Stdin.readToEnd,
-    stdout: Stdout.write,
-    time: \{} -> Utc.now {} |> Task.map Utc.toMillisSinceEpoch,
+
+main! : List(OsStr) => Try({}, _)
+main! = |_| {
+	input = Str.from_utf8(Stdin.read_to_end!()?) ? |err| InvalidUtf8(err)
+	answer1 = part1(input) ? |err| SolverFailed(Str.inspect(err))
+	answer2 = part2(input) ? |err| SolverFailed(Str.inspect(err))
+	Stdout.line!("Part 1: ${answer1}")?
+	Stdout.line!("Part 2: ${answer2}")?
+	Ok({})
 }
 
-main =
-    AoC.solve {
-        year: 2023,
-        day: 1,
-        title: "Trebuchet?!",
-        part1,
-        part2,
-    }
+part1 : Str -> Try(Str, [NoDigit(Str)])
+part1 = |input| {
+	total = calibration_sum(input.trim().split_on("\n"), DigitsOnly, 0)?
+	Ok("The sum of all of the calibration values ${total.to_str()}")
+}
 
-exampleInputPart1 =
-    """
-    1abc2
-    pqr3stu8vwx
-    a1b2c3d4e5f
-    treb7uchet
-    """
+## Part one finds the first and last numeric characters on each line.
+expect part1(example_input_part1) == Ok("The sum of all of the calibration values 142")
 
-exampleInputPart2 =
-    """
-    two1nine
-    eightwothree
-    abcone2threexyz
-    xtwone3four
-    4nineeightseven2
-    zoneight234
-    7pqrstsixteen
-    """
+part2 : Str -> Try(Str, [NoDigit(Str)])
+part2 = |input| {
+	total = calibration_sum(input.trim().split_on("\n"), DigitsAndWords, 0)?
+	Ok("The sum of all of the calibration values ${total.to_str()}")
+}
 
-part1 : Str -> Result Str [NotImplemented, Error Str]
-part1 = \input ->
+calibration_sum : List(Str), [DigitsOnly, DigitsAndWords], U64 -> Try(U64, [NoDigit(Str)])
+calibration_sum = |lines, mode, total| match lines {
+	[] => Ok(total)
+	[line, .. as rest] => {
+		digits = match mode {
+			DigitsOnly => line.to_utf8().keep_if(is_digit)
+			DigitsAndWords => take_digits(line.to_utf8(), [])
+		}
+		value = calibration(line, digits)?
+		calibration_sum(rest, mode, total + value)
+	}
+}
 
-    vals =
-        input
-        |> Str.splitOn "\n"
-        |> List.map Str.toUtf8
-        |> List.map \bytes -> bytes |> List.keepIf isDigit
-        |> List.map toCalibration
+## Part two recognises overlapping digit words as well as numeric characters.
+expect part2(example_input_part2) == Ok("The sum of all of the calibration values 281")
 
-    Ok "The sum of all of the calibration values $(vals |> List.sum |> Num.toStr)"
+is_digit : U8 -> Bool
+is_digit = |byte| byte >= '0' and byte <= '9'
 
-expect part1 exampleInputPart1 == Ok "The sum of all of the calibration values 142"
+calibration : Str, List(U8) -> Try(U64, [NoDigit(Str)])
+calibration = |line, digits| match digits {
+	[first, .., last] => Ok((first - '0').to_u64() * 10 + (last - '0').to_u64())
+	[first] => Ok((first - '0').to_u64() * 11)
+	[] => Err(NoDigit(line))
+}
 
-part2 : Str -> Result Str [NotImplemented, Error Str]
-part2 = \input ->
+take_digits : List(U8), List(U8) -> List(U8)
+take_digits = |rest, digits| match rest {
+	[] => digits
+	[first, .. as tail] if is_digit(first) => take_digits(tail, digits.append(first))
+	['o', 'n', 'e', ..] => take_digits(rest.drop_first(1), digits.append('1'))
+	['t', 'w', 'o', ..] => take_digits(rest.drop_first(1), digits.append('2'))
+	['t', 'h', 'r', 'e', 'e', ..] => take_digits(rest.drop_first(1), digits.append('3'))
+	['f', 'o', 'u', 'r', ..] => take_digits(rest.drop_first(1), digits.append('4'))
+	['f', 'i', 'v', 'e', ..] => take_digits(rest.drop_first(1), digits.append('5'))
+	['s', 'i', 'x', ..] => take_digits(rest.drop_first(1), digits.append('6'))
+	['s', 'e', 'v', 'e', 'n', ..] => take_digits(rest.drop_first(1), digits.append('7'))
+	['e', 'i', 'g', 'h', 't', ..] => take_digits(rest.drop_first(1), digits.append('8'))
+	['n', 'i', 'n', 'e', ..] => take_digits(rest.drop_first(1), digits.append('9'))
+	[_, .. as tail] => take_digits(tail, digits)
+}
 
-    sum =
-        input
-        |> Str.splitOn "\n"
-        |> List.map Str.toUtf8
-        |> List.map \bytes -> takeDigits { digits: [], rest: bytes }
-        |> List.map toCalibration
-        |> List.sum
+example_input_part1 = 
+	\\1abc2
+	\\pqr3stu8vwx
+	\\a1b2c3d4e5f
+	\\treb7uchet
 
-    Ok "The sum of all of the calibration values $(Num.toStr sum)"
-
-expect part2 exampleInputPart2 == Ok "The sum of all of the calibration values 281"
-
-isDigit : U8 -> Bool
-isDigit = \b -> b >= '0' && b <= '9'
-
-toCalibration : List U8 -> U32
-toCalibration = \digits ->
-    when (List.first digits, List.last digits) is
-        (Ok first, Ok last) ->
-            when [first, last] |> Str.fromUtf8 |> Result.try Str.toU32 is
-                Ok n -> n
-                Err _ -> crash "couldnt parse number"
-
-        _ -> crash "expected at least one number"
-
-takeDigits : { digits : List U8, rest : List U8 } -> List U8
-takeDigits = \{ digits, rest } ->
-    when rest is
-        [] -> digits
-        [a, ..] if isDigit a -> takeDigits { digits: List.append digits a, rest: List.dropFirst rest 1 }
-        ['o', 'n', 'e', ..] -> takeDigits { digits: List.append digits '1', rest: List.dropFirst rest 1 }
-        ['t', 'w', 'o', ..] -> takeDigits { digits: List.append digits '2', rest: List.dropFirst rest 1 }
-        ['t', 'h', 'r', 'e', 'e', ..] -> takeDigits { digits: List.append digits '3', rest: List.dropFirst rest 1 }
-        ['f', 'o', 'u', 'r', ..] -> takeDigits { digits: List.append digits '4', rest: List.dropFirst rest 1 }
-        ['f', 'i', 'v', 'e', ..] -> takeDigits { digits: List.append digits '5', rest: List.dropFirst rest 1 }
-        ['s', 'i', 'x', ..] -> takeDigits { digits: List.append digits '6', rest: List.dropFirst rest 1 }
-        ['s', 'e', 'v', 'e', 'n', ..] -> takeDigits { digits: List.append digits '7', rest: List.dropFirst rest 1 }
-        ['e', 'i', 'g', 'h', 't', ..] -> takeDigits { digits: List.append digits '8', rest: List.dropFirst rest 1 }
-        ['n', 'i', 'n', 'e', ..] -> takeDigits { digits: List.append digits '9', rest: List.dropFirst rest 1 }
-        _ -> takeDigits { digits, rest: List.dropFirst rest 1 }
+example_input_part2 = 
+	\\two1nine
+	\\eightwothree
+	\\abcone2threexyz
+	\\xtwone3four
+	\\4nineeightseven2
+	\\zoneight234
+	\\7pqrstsixteen
