@@ -20,14 +20,7 @@ part1 = |input| {
 
 	unique_locations = antennas.fold(
 		Set.empty(),
-		|unique, _, locations| {
-			pairs = to_pairs(locations, Set.empty())
-			pairs.map(|{ first, second }| anti_nodes(first, second)).to_list().fold(
-				unique,
-				|set, { first, second }|
-					set.insert(first).insert(second),
-			)
-		},
+		|unique, _, locations| add_antinodes(locations, unique),
 	)
 
 	unique_locations.keep_if(in_map).len().to_str()
@@ -67,22 +60,33 @@ expect anti_nodes({ r: 3, c: 4 }, { r: 4, c: 8 }) == { first: { c: 0, r: 2 }, se
 ## Antinode direction follows both input coordinates.
 expect anti_nodes({ r: 1, c: 8 }, { r: 2, c: 5 }) == { first: { r: 0, c: 11 }, second: { r: 3, c: 2 } }
 
-to_pairs : List(Position), Set({ first : Position, second : Position }) -> Set({ first : Position, second : Position })
-to_pairs = |nodes, acc| {
+add_antinodes : List(Position), Set(Position) -> Set(Position)
+add_antinodes = |nodes, antinodes| {
 	match nodes {
-		[] => acc
-		[first, .. as rest] =>
-			to_pairs(rest, rest.fold(acc, |set, node| set.insert({ first, second: node })))
+		[] => antinodes
+		[first, .. as rest] => {
+			updated = rest.fold(
+				antinodes,
+				|set, second| {
+					pair = anti_nodes(first, second)
+					set.insert(pair.first).insert(pair.second)
+				},
+			)
+			add_antinodes(rest, updated)
 		}
+	}
 }
 
-## Pair generation selects each unique pair once.
+## Pair traversal inserts both antinodes without materialising the pairs.
 expect {
-	actual = to_pairs([{ c: 6, r: 5 }, { c: 8, r: 8 }, { c: 9, r: 9 }], Set.empty())
+	actual = add_antinodes([{ c: 6, r: 5 }, { c: 8, r: 8 }, { c: 9, r: 9 }], Set.empty())
 	expected = Set.from_list([
-		{ first: { c: 6, r: 5 }, second: { c: 8, r: 8 } },
-		{ first: { c: 6, r: 5 }, second: { c: 9, r: 9 } },
-		{ first: { c: 8, r: 8 }, second: { c: 9, r: 9 } },
+		{ r: 2, c: 4 },
+		{ r: 11, c: 10 },
+		{ r: 1, c: 3 },
+		{ r: 13, c: 12 },
+		{ r: 7, c: 7 },
+		{ r: 10, c: 10 },
 	])
 	actual == expected
 }

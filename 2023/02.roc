@@ -82,38 +82,38 @@ expect !is_valid_game({ id: 1, reveals: [[Blue(15)]] })
 
 min_cube_set : Game -> CubeSet
 min_cube_set = |game|
-	flatten(game.reveals).fold(
+	game.reveals.fold(
 		{ red: 0, green: 0, blue: 0 },
-		|set, cube| match cube {
-			Red(count) => {
-				..set,
-				red: if count > set.red {
-					count
-				} else {
-					set.red
-				},
-			}
-			Green(count) => {
-				..set,
-				green: if count > set.green {
-					count
-				} else {
-					set.green
-				},
-			}
-			Blue(count) => {
-				..set,
-				blue: if count > set.blue {
-					count
-				} else {
-					set.blue
-				},
-			}
-		},
+		|set, reveal| reveal.fold(set, update_cube_set),
 	)
 
-flatten : List(List(a)) -> List(a)
-flatten = |lists| lists.fold([], List.concat)
+update_cube_set : CubeSet, Cube -> CubeSet
+update_cube_set = |set, cube| match cube {
+	Red(count) => {
+		..set,
+		red: if count > set.red {
+			count
+		} else {
+			set.red
+		},
+	}
+	Green(count) => {
+		..set,
+		green: if count > set.green {
+			count
+		} else {
+			set.green
+		},
+	}
+	Blue(count) => {
+		..set,
+		blue: if count > set.blue {
+			count
+		} else {
+			set.blue
+		},
+	}
+}
 
 ## The minimum set takes the maximum count of each colour.
 expect min_cube_set({ id: 1, reveals: [[Blue(3), Red(4)], [Red(1), Green(2), Blue(6)]] })

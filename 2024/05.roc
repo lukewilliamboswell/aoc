@@ -33,14 +33,19 @@ part1 = |input| {
 ## Part one sums middle pages from updates already in the right order.
 expect part1(example_input) == Ok("143")
 
-part2 : Str -> Try(Str, _)
+part2 : Str -> Try(Str, [CyclicRules, ParsingFailure(Str), ParsingIncomplete(Str)])
 part2 = |input| {
 	{ rules, updates } = parse(input.trim())?
-	total = updates
-		.keep_if(|update| rules.any(|rule| !check_rule(update, rule)))
-		.map(|update| apply_rules(update, rules))
-		.map(get_middle)
-		.sum()
+	initial : Try(U64, [CyclicRules])
+	initial = Ok(0)
+	total = updates.keep_if(|update| rules.any(|rule| !check_rule(update, rule))).fold(
+		initial,
+		|result, update| {
+			sum = result?
+			ordered = order_update(update, rules)?
+			Ok(sum + get_middle(ordered))
+		},
+	)?
 	Ok(total.to_str())
 }
 
@@ -56,52 +61,34 @@ check_rule = |update, { before, after }| match update.keep_if(|number| number ==
 ## A correctly ordered update satisfies a relevant rule.
 expect check_rule([75, 47, 61, 53, 29], { before: 47, after: 53 })
 
-reorder_rule : List(U64), Rule -> [Swapped(List(U64)), NoChange]
-reorder_rule = |update, { before, after }| {
-	positions = { before: find_index(update, before, 0), after: find_index(update, after, 0) }
-	match (positions.before, positions.after) {
-		(Some(before_index), Some(after_index)) if before_index > after_index => Swapped(update.swap(before_index, after_index) ?? update)
-		_ => NoChange
+order_update : List(U64), List(Rule) -> Try(List(U64), [CyclicRules])
+order_update = |update, rules| order_pages(update, rules, [])
+
+order_pages : List(U64), List(Rule), List(U64) -> Try(List(U64), [CyclicRules])
+order_pages = |remaining, rules, ordered| match remaining {
+	[] => Ok(ordered)
+	_ => match remaining.find_first(
+		|page|
+			!rules.any(|rule| rule.after == page and remaining.contains(rule.before)),
+	) {
+		Ok(next) => order_pages(remaining.keep_if(|page| page != next), rules, ordered.append(next))
+		Err(_) => Err(CyclicRules)
 	}
 }
 
-find_index : List(U64), U64, U64 -> [Some(U64), None]
-find_index = |numbers, wanted, index| match numbers {
-	[] => None
-	[first, ..] if first == wanted => Some(index)
-	[_, .. as rest] => find_index(rest, wanted, index + 1)
-}
+## Ordering uses the transitive rule graph rather than repeated pair swaps.
+expect order_update([3, 2, 1], [{ before: 1, after: 2 }, { before: 2, after: 3 }]) == Ok([1, 2, 3])
 
-## A violated rule swaps the two relevant pages.
-expect reorder_rule([75, 53, 61, 47, 29], { before: 47, after: 53 }) == Swapped([75, 47, 61, 53, 29])
-
-apply_rules : List(U64), List(Rule) -> List(U64)
-apply_rules = |update, rules| {
-	outcome = rules.fold_until(
-		NoChange,
-		|_, rule| match reorder_rule(update, rule) {
-			Swapped(new) => Break(Swapped(new))
-			NoChange => Continue(NoChange)
-		},
-	)
-	match outcome {
-		Swapped(new) => apply_rules(new, rules)
-		NoChange => update
-	}
-}
-
-## Rule application repeats until the whole update is ordered.
-expect apply_rules(
-	[75, 47, 61, 53, 29],
-	[{ before: 61, after: 47 }, { before: 99, after: 47 }, { before: 47, after: 75 }],
-) == [61, 47, 75, 53, 29]
+## Cyclic ordering rules return a structured error.
+expect order_update([1, 2], [{ before: 1, after: 2 }, { before: 2, after: 1 }]) == Err(CyclicRules)
 
 get_middle : List(U64) -> U64
-get_middle = |numbers| match numbers {
-	[middle] => middle
-	[_, .., _] => get_middle(numbers.drop_first(1).drop_last(1))
-	[] => {
+get_middle = |numbers| {
+	if numbers.is_empty() or numbers.len() % 2 == 0 {
 		crash "expected an odd, non-empty update"
+	}
+	numbers.get(numbers.len() / 2) ?? {
+		crash "middle index must be in bounds"
 	}
 }
 

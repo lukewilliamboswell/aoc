@@ -84,9 +84,9 @@ pow_two = |power, result| if power == 0 {
 expect score_card(example_card) == 8
 
 count_all_cards : List(Card), List(U64), U64 -> List(U64)
-count_all_cards = |cards, counts, index| match cards.drop_first(index) {
-	[] => counts
-	[card, ..] => {
+count_all_cards = |cards, counts, index| match cards.get(index) {
+	Err(_) => counts
+	Ok(card) => {
 		current_count = get_count(counts, index)
 		updated = add_copies(counts, index + 1, count_wins(card), current_count)
 		count_all_cards(cards, updated, index + 1)

@@ -12,7 +12,7 @@ Grid : { cells : List(U8), width : U64, height : U64, start : Position, end : Po
 
 ParseState : { cells : List(U8), start : [Found(Position), Missing], end : [Found(Position), Missing] }
 
-Search : { queue : List(Position), distances : Dict(Position, U64) }
+Search : { queue : List(Position), next : U64, distances : Dict(Position, U64) }
 
 main! : List(OsStr) => Try({}, _)
 main! = |_| {
@@ -94,21 +94,22 @@ parse_row = |bytes, row, col, state|
 
 distances_from_end : Grid -> Try(Dict(Position, U64), _)
 distances_from_end = |grid| {
-	initial = { queue: [grid.end], distances: Dict.single(grid.end, 0) }
+	initial = { queue: [grid.end], next: 0, distances: Dict.single(grid.end, 0) }
 	breadth_first(grid, initial)
 }
 
 breadth_first : Grid, Search -> Try(Dict(Position, U64), _)
-breadth_first = |grid, search|
-	match search.queue {
-		[] => Ok(search.distances)
-		[current, .. as rest] => {
-			distance = search.distances.get(current)?
-			current_height = height_at(grid, current)?
-			updated = visit_neighbors(grid, neighbors(grid, current), current_height, distance, { ..search, queue: rest })?
-			breadth_first(grid, updated)
-		}
+breadth_first = |grid, search| {
+	if search.next >= search.queue.len() {
+		return Ok(search.distances)
 	}
+	current = search.queue.get(search.next)?
+	distance = search.distances.get(current)?
+	current_height = height_at(grid, current)?
+	advanced = { ..search, next: search.next + 1 }
+	updated = visit_neighbors(grid, neighbors(grid, current), current_height, distance, advanced)?
+	breadth_first(grid, updated)
+}
 
 visit_neighbors : Grid, List(Position), U8, U64, Search -> Try(Search, _)
 visit_neighbors = |grid, positions, current_height, distance, search|
@@ -117,7 +118,7 @@ visit_neighbors = |grid, positions, current_height, distance, search|
 		[position, .. as rest] => {
 			neighbor_height = height_at(grid, position)?
 			updated = if !search.distances.contains(position) and neighbor_height + 1 >= current_height {
-				{ queue: search.queue.append(position), distances: search.distances.insert(position, distance + 1) }
+				{ ..search, queue: search.queue.append(position), distances: search.distances.insert(position, distance + 1) }
 			} else {
 				search
 			}
